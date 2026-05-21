@@ -1,0 +1,133 @@
+import { Router, Request, Response } from 'express';
+import multer from 'multer';
+import { authMiddleware, requireAdmin } from '../middleware/auth';
+import { login, getMe, refreshTokens, logout } from '../auth/authController';
+import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota } from '../ai/aiController';
+import {
+  listContent, getContent, createContent, updateContent,
+  submitForReview, approveContent, rejectContent, deleteContent,
+} from '../content/contentController';
+import { getPosts, getCategories, uploadMedia, getMedia } from '../wp/wpProxy';
+import { query } from '../db/pool';
+
+const router = Router();
+const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+// ── Auth ──────────────────────────────────────────────────────────────────────
+router.post('/auth/login',   login);
+router.post('/auth/refresh', refreshTokens);
+router.post('/auth/logout',  authMiddleware, logout);
+router.get('/auth/me',       authMiddleware, getMe);
+
+// ── AI (sync) ──────────────────────────────────────────────────────────────────
+router.post('/ai/generate',         authMiddleware, generate);
+router.get('/ai/quota',             authMiddleware, quota);
+router.get('/ai/keys',              authMiddleware, getUserKeys);
+router.post('/ai/keys',             authMiddleware, saveUserKey);
+router.delete('/ai/keys/:provider', authMiddleware, deleteUserKey);
+
+// ── AI (async job queue) ──────────────────────────────────────────────────────
+router.post('/ai/job',      authMiddleware, postJob);
+router.get('/ai/job/:id',   authMiddleware, pollJob);
+
+// ── Content ───────────────────────────────────────────────────────────────────
+router.get('/content',              authMiddleware, listContent);
+router.get('/content/:id',          authMiddleware, getContent);
+router.post('/content',             authMiddleware, createContent);
+router.put('/content/:id',          authMiddleware, updateContent);
+router.post('/content/:id/submit',  authMiddleware, submitForReview);
+router.post('/content/:id/approve', authMiddleware, requireAdmin, approveContent);
+router.post('/content/:id/reject',  authMiddleware, requireAdmin, rejectContent);
+router.delete('/content/:id',       authMiddleware, deleteContent);
+
+// ── WordPress Proxy ───────────────────────────────────────────────────────────
+router.get('/wp/posts', authMiddleware, async (req: Request, res: Response) => {
+  try { res.json(await getPosts(req.query as any)); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/wp/categories', authMiddleware, async (_req: Request, res: Response) => {
+  try { res.json(await getCategories()); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/wp/media', authMiddleware, async (req: Request, res: Response) => {
+  try { res.json(await getMedia(req.query as any)); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/wp/media', authMiddleware, upload.single('file'), async (req: Request, res: Response) => {
+  if (!req.file) return res.status(400).json({ error: 'فایلی انتخاب نشده' });
+  try {
+    const result = await uploadMedia(req.file.buffer, req.file.originalname, req.file.mimetype);
+    res.json(result);
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+// ── Users (Admin) ─────────────────────────────────────────────────────────────
+router.get('/users', authMiddleware, requireAdmin, async (_req: Request, res: Response) => {
+  const rows = await query('SELECT id, username, display_name, email, role, is_active, created_at FROM users ORDER BY created_at DESC');
+  res.json(rows);
+});
+
+router.patch('/users/:id/role', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  const { role } = req.body;
+  if (!['admin', 'editor'].includes(role)) return res.status(400).json({ error: 'نقش نامعتبر' });
+  await query('UPDATE users SET role=? WHERE id=?', [role, req.params.id]);
+  res.json({ message: 'نقش بروزرسانی شد' });
+});
+
+// ── Stats ─────────────────────────────────────────────────────────────────────
+router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
+  const userId  = (req as any).user.userId as number;
+  const isAdmin = (req as any).user.role === 'admin';
+
+  const [pending, approved, total, aiUsage] = await Promise.all([
+    isAdmin
+      ? query("SELECT COUNT(*) as c FROM content_staging WHERE status='pending'")
+      : query("SELECT COUNT(*) as c FROM content_staging WHERE status='pending' AND user_id=?", [userId]),
+    isAdmin
+      ? query("SELECT COUNT(*) as c FROM content_staging WHERE status='published'")
+      : query("SELECT COUNT(*) as c FROM content_staging WHERE status='published' AND user_id=?", [userId]),
+    isAdmin
+      ? query('SELECT COUNT(*) as c FROM content_staging')
+      : query('SELECT COUNT(*) as c FROM content_staging WHERE user_id=?', [userId]),
+    query('SELECT COUNT(*) as c FROM ai_usage WHERE user_id=? AND DATE(used_at)=CURDATE()', [userId]),
+  ]);
+
+  res.json({
+    pending:  parseInt(String(pending[0]?.c  || '0')),
+    approved: parseInt(String(approved[0]?.c || '0')),
+    total:    parseInt(String(total[0]?.c    || '0')),
+    aiToday:  parseInt(String(aiUsage[0]?.c  || '0')),
+  });
+});
+
+// ── Monitoring ────────────────────────────────────────────────────────────────
+router.get('/monitoring/logs', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  const limitVal = Math.min(parseInt(req.query.limit as string || '50'), 200);
+  const level    = req.query.level as string | undefined;
+  const params: any[] = [];
+  let sql = 'SELECT * FROM system_logs WHERE 1=1';
+  if (level) { params.push(level); sql += ' AND level = ?'; }
+  sql += ' ORDER BY created_at DESC LIMIT ?';
+  params.push(limitVal);
+  const rows = await query(sql, params);
+  res.json(rows);
+});
+
+router.get('/monitoring/ai-stats', authMiddleware, requireAdmin, async (_req: Request, res: Response) => {
+  const rows = await query(`
+    SELECT provider,
+           COUNT(*) as requests,
+           SUM(CASE WHEN used_own_key=1 THEN 1 ELSE 0 END) as own_key_count,
+           DATE(used_at) as date
+    FROM ai_usage
+    WHERE used_at > NOW() - INTERVAL 7 DAY
+    GROUP BY provider, DATE(used_at)
+    ORDER BY date DESC
+  `);
+  res.json(rows);
+});
+
+export default router;

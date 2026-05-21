@@ -1,0 +1,144 @@
+import { pool } from './pool';
+
+const statements = [
+  // Users table
+  `CREATE TABLE IF NOT EXISTS users (
+    id            INT AUTO_INCREMENT PRIMARY KEY,
+    wp_user_id    INT UNIQUE NOT NULL,
+    username      VARCHAR(100) NOT NULL,
+    display_name  VARCHAR(200),
+    email         VARCHAR(200),
+    role          VARCHAR(50) DEFAULT 'editor',
+    avatar_url    TEXT,
+    is_active     TINYINT(1) DEFAULT 1,
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // AI Keys (encrypted)
+  `CREATE TABLE IF NOT EXISTS user_ai_keys (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    user_id      INT NOT NULL,
+    provider     VARCHAR(50) NOT NULL,
+    api_key_enc  TEXT NOT NULL,
+    is_active    TINYINT(1) DEFAULT 1,
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uq_user_provider (user_id, provider),
+    CONSTRAINT fk_aikeys_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // AI usage & quota
+  `CREATE TABLE IF NOT EXISTS ai_usage (
+    id           INT AUTO_INCREMENT PRIMARY KEY,
+    user_id      INT NOT NULL,
+    provider     VARCHAR(50) NOT NULL,
+    model        VARCHAR(100),
+    action       VARCHAR(100),
+    tokens_in    INT DEFAULT 0,
+    tokens_out   INT DEFAULT 0,
+    used_own_key TINYINT(1) DEFAULT 0,
+    used_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_aiusage_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // AI async jobs (job queue persistence)
+  `CREATE TABLE IF NOT EXISTS ai_jobs (
+    id         VARCHAR(36) PRIMARY KEY,
+    user_id    INT NOT NULL,
+    queue      VARCHAR(50) NOT NULL,
+    status     ENUM('pending','processing','completed','failed') DEFAULT 'pending',
+    input      JSON NOT NULL,
+    result     LONGTEXT,
+    error      TEXT,
+    attempts   INT DEFAULT 0,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_aijobs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // Content staging (with scheduling support)
+  `CREATE TABLE IF NOT EXISTS content_staging (
+    id             INT AUTO_INCREMENT PRIMARY KEY,
+    user_id        INT,
+    wp_post_id     INT,
+    content_type   VARCHAR(50) DEFAULT 'article',
+    lang           VARCHAR(20) DEFAULT 'fa',
+    title_fa       TEXT,
+    title_en       TEXT,
+    content_fa     LONGTEXT,
+    content_en     LONGTEXT,
+    excerpt_fa     TEXT,
+    excerpt_en     TEXT,
+    youtube_url    TEXT,
+    podcast_url    TEXT,
+    embed_provider VARCHAR(50),
+    featured_media INT,
+    categories     JSON,
+    status         VARCHAR(30) DEFAULT 'draft',
+    approval_note  TEXT,
+    approved_by    INT,
+    approved_at    DATETIME,
+    scheduled_at   DATETIME,
+    published_at   DATETIME,
+    created_at     DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at     DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT fk_content_user     FOREIGN KEY (user_id)     REFERENCES users(id) ON DELETE SET NULL,
+    CONSTRAINT fk_content_approver FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // Refresh tokens (rotation-based security)
+  `CREATE TABLE IF NOT EXISTS refresh_tokens (
+    id          INT AUTO_INCREMENT PRIMARY KEY,
+    user_id     INT NOT NULL,
+    token_hash  VARCHAR(64) NOT NULL UNIQUE,
+    device_info VARCHAR(200),
+    ip          VARCHAR(45),
+    expires_at  DATETIME NOT NULL,
+    revoked     TINYINT(1) DEFAULT 0,
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_rt_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // System logs
+  `CREATE TABLE IF NOT EXISTS system_logs (
+    id         INT AUTO_INCREMENT PRIMARY KEY,
+    level      VARCHAR(20) NOT NULL,
+    source     VARCHAR(50),
+    message    TEXT NOT NULL,
+    meta       JSON,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
+  // Indexes
+  `CREATE INDEX IF NOT EXISTS idx_ai_usage_user_date    ON ai_usage(user_id, used_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_usage_date          ON ai_usage(used_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_jobs_user_status    ON ai_jobs(user_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_jobs_created        ON ai_jobs(created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_content_status         ON content_staging(status)`,
+  `CREATE INDEX IF NOT EXISTS idx_content_user_status    ON content_staging(user_id, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_content_scheduled      ON content_staging(scheduled_at, status)`,
+  `CREATE INDEX IF NOT EXISTS idx_logs_created           ON system_logs(created_at)`,
+  `CREATE INDEX IF NOT EXISTS idx_logs_level             ON system_logs(level)`,
+  `CREATE INDEX IF NOT EXISTS idx_users_wp_id            ON users(wp_user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_ai_keys_user_provider  ON user_ai_keys(user_id, provider)`,
+  `CREATE INDEX IF NOT EXISTS idx_rt_user                ON refresh_tokens(user_id)`,
+  `CREATE INDEX IF NOT EXISTS idx_rt_hash                ON refresh_tokens(token_hash)`,
+];
+
+async function migrate() {
+  const conn = await pool.getConnection();
+  try {
+    for (const sql of statements) {
+      await conn.execute(sql);
+    }
+    console.log('✅ Database migration complete');
+  } catch (err) {
+    console.error('❌ Migration failed:', err);
+    process.exit(1);
+  } finally {
+    conn.release();
+    await pool.end();
+  }
+}
+
+migrate();
