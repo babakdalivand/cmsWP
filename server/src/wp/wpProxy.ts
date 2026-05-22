@@ -53,16 +53,22 @@ export async function deletePost(id: number) {
 }
 
 export async function uploadMedia(fileBuffer: Buffer, filename: string, mimeType: string) {
+  // ASCII-safe filename for Content-Disposition (RFC 5987 for the real name)
+  const asciiName = filename.replace(/[^\x20-\x7E]/g, '_');
+  const encodedName = encodeURIComponent(filename);
+
   const fd = new FormData();
   fd.append('file', fileBuffer, { filename, contentType: mimeType });
 
   const res = await axios.post(`${WP_BASE}/media`, fd, {
     headers: {
       Authorization: `Basic ${AUTH}`,
-      'Content-Disposition': `attachment; filename="${filename}"`,
+      'Content-Disposition': `attachment; filename="${asciiName}"; filename*=UTF-8''${encodedName}`,
       ...fd.getHeaders(),
     },
-    timeout: 30000,
+    timeout: 60000,
+    maxContentLength: Infinity,
+    maxBodyLength: Infinity,
   });
   return res.data;
 }

@@ -161,7 +161,9 @@ export function useUploadMedia() {
     mutationFn: (file: File) => {
       const fd = new FormData();
       fd.append('file', file);
-      return api.post('/wp/media', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+      // Let axios add the multipart boundary itself — setting Content-Type
+      // manually to "multipart/form-data" without a boundary breaks the upload.
+      return api.post('/wp/media', fd).then(r => r.data);
     },
     onSuccess: () => qc.invalidateQueries({ queryKey: ['media'] }),
   });

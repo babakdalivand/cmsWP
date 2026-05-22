@@ -76,6 +76,14 @@ export default function CreateContent() {
     const file = e.target.files?.[0];
     if (!file) return;
     setError('');
+
+    // 20MB limit on backend
+    if (file.size > 20 * 1024 * 1024) {
+      setError(`فایل خیلی بزرگ است (${(file.size / 1024 / 1024).toFixed(1)} MB). حداکثر 20 MB.`);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
     try {
       const result = await uploadMut.mutateAsync(file);
       setMediaFile({
@@ -85,7 +93,12 @@ export default function CreateContent() {
         filename: result.title?.rendered || file.name,
       });
     } catch (err: any) {
-      setError(err.response?.data?.error || 'خطا در آپلود فایل');
+      const detail = err.response?.data?.error
+        || err.response?.data?.message
+        || err.message
+        || 'خطای ناشناخته';
+      console.error('Upload error:', err.response || err);
+      setError(`خطا در آپلود: ${detail}`);
     } finally {
       if (fileInputRef.current) fileInputRef.current.value = '';
     }

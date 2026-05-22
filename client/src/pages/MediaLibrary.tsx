@@ -201,7 +201,7 @@ export default function MediaLibrary() {
     const fd = new FormData();
     fd.append('file', file, name || (file as File).name || 'upload.jpg');
     try {
-      await api.post('/wp/media', fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      await api.post('/wp/media', fd);
       await load();
     } catch (err: any) {
       alert(err.response?.data?.error || 'خطا در آپلود');
