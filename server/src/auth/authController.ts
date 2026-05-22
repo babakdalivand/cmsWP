@@ -26,23 +26,27 @@ async function validateViaWPAPI(username: string, password: string) {
 }
 
 async function upsertUser(wpUser: any, role: string): Promise<number> {
+  const wpId        = wpUser.id ?? wpUser.ID ?? null;
+  const username    = wpUser.slug ?? wpUser.user_login ?? null;
+  const displayName = wpUser.name ?? wpUser.display_name ?? null;
+  const email       = wpUser.email ?? wpUser.user_email ?? null;
+
   const existing = await queryOne<{ id: number }>(
     'SELECT id FROM users WHERE wp_user_id = ?',
-    [wpUser.id || wpUser.ID]
+    [wpId]
   );
 
   if (existing) {
     await query(
       'UPDATE users SET display_name=?, email=?, updated_at=NOW() WHERE wp_user_id=?',
-      [wpUser.name || wpUser.display_name, wpUser.email || wpUser.user_email, wpUser.id || wpUser.ID]
+      [displayName, email, wpId]
     );
     return existing.id;
   }
 
   return queryInsert(
     'INSERT INTO users (wp_user_id, username, display_name, email, role) VALUES (?, ?, ?, ?, ?)',
-    [wpUser.id || wpUser.ID, wpUser.slug || wpUser.user_login,
-     wpUser.name || wpUser.display_name, wpUser.email || wpUser.user_email, role]
+    [wpId, username, displayName, email, role]
   );
 }
 
@@ -133,8 +137,9 @@ export async function login(req: Request, res: Response) {
       },
     });
   } catch (err: any) {
+    console.error('❌ Login error:', err.message, err.stack);
     logger.error('Login error', { error: err.message });
-    return res.status(500).json({ error: 'خطای سرور' });
+    return res.status(500).json({ error: 'خطای سرور', detail: err.message });
   }
 }
 
