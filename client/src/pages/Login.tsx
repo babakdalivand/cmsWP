@@ -28,7 +28,7 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-6" dir="rtl">
+    <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-6" dir="ltr">
       {/* WP Logo */}
       <div className="mb-10 flex flex-col items-center gap-3">
         <div className="w-20 h-20 rounded-2xl bg-surface border border-border flex items-center justify-center shadow-lg shadow-blue/10">
@@ -52,7 +52,7 @@ export default function Login() {
             placeholder="نام کاربری وردپرس"
             value={form.username}
             onChange={(e) => setForm({ ...form, username: e.target.value })}
-            className="w-full bg-surface border border-border rounded-xl px-4 py-4 text-white placeholder-label focus:outline-none focus:border-blue transition-colors text-right"
+            className="w-full bg-surface border border-border rounded-xl px-4 py-4 text-white placeholder-label focus:outline-none focus:border-blue transition-colors text-left"
             required
           />
         </div>
@@ -63,13 +63,13 @@ export default function Login() {
             placeholder="رمز عبور"
             value={form.password}
             onChange={(e) => setForm({ ...form, password: e.target.value })}
-            className="w-full bg-surface border border-border rounded-xl px-4 py-4 text-white placeholder-label focus:outline-none focus:border-blue transition-colors text-right pr-4 pl-12"
+            className="w-full bg-surface border border-border rounded-xl px-4 py-4 text-white placeholder-label focus:outline-none focus:border-blue transition-colors text-left pl-4 pr-12"
             required
           />
           <button
             type="button"
             onClick={() => setShow(!show)}
-            className="absolute left-4 top-1/2 -translate-y-1/2 text-label"
+            className="absolute right-4 top-1/2 -translate-y-1/2 text-label"
           >
             {show ? <EyeOff size={18} /> : <Eye size={18} />}
           </button>
