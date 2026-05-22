@@ -43,8 +43,8 @@ async function upsertUser(wpUser: any, role: string): Promise<number> {
 
   if (existing) {
     await query(
-      'UPDATE users SET display_name=?, email=?, updated_at=NOW() WHERE wp_user_id=?',
-      [displayName, email, wpId]
+      'UPDATE users SET display_name=?, email=?, role=?, updated_at=NOW() WHERE wp_user_id=?',
+      [displayName, email, role, wpId]
     );
     return existing.id;
   }
@@ -105,7 +105,19 @@ export async function login(req: Request, res: Response) {
       const name   = wpToken.displayName ?? wpToken.user_display_name ?? wpToken.nicename ?? username;
       const email  = wpToken.email ?? wpToken.user_email ?? null;
       wpUser = wpId ? { id: wpId, name, email, slug: username } : null;
-      role = wpToken.user_roles?.includes('administrator') ? 'admin' : 'editor';
+
+      // Tmeister includes user_roles inline; Useful Team doesn't, so fetch via JWT
+      let roles: string[] = wpToken.user_roles ?? [];
+      if (!roles.length && wpToken.token && wpId) {
+        try {
+          const meRes = await axios.get(
+            `${config.wp.url}/wp-json/wp/v2/users/${wpId}?context=edit`,
+            { headers: { Authorization: `Bearer ${wpToken.token}` }, timeout: 8000 }
+          );
+          roles = meRes.data?.roles ?? [];
+        } catch { /* fall through to default editor role */ }
+      }
+      role = roles.includes('administrator') ? 'admin' : 'editor';
     }
 
     if (!wpUser) {
