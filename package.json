@@ -3,6 +3,7 @@
   "version": "1.0.0",
   "scripts": {
     "build": "(cd server && npm install --include=dev && npm run build) && (cd client && npm install --include=dev && npx vite build)",
+    "postinstall": "npm run build",
     "start": "node server/dist/app.js",
     "db:migrate": "node server/dist/db/migrate.js"
   },
