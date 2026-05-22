@@ -109,6 +109,8 @@ const tableSql = [
 // MySQL doesn't support ADD COLUMN IF NOT EXISTS — ignore 1060 (ER_DUP_FIELDNAME).
 const alterSql = [
   `ALTER TABLE users ADD COLUMN telegram_chat_id BIGINT NULL UNIQUE`,
+  `ALTER TABLE user_ai_keys ADD COLUMN custom_url VARCHAR(500) NULL`,
+  `ALTER TABLE user_ai_keys ADD COLUMN custom_model VARCHAR(200) NULL`,
 ];
 
 // MySQL doesn't support CREATE INDEX IF NOT EXISTS — ignore duplicate key errors (1061)

@@ -58,21 +58,47 @@ export async function pollJob(req: Request, res: Response) {
 
 export async function saveUserKey(req: Request, res: Response) {
   const userId = (req as any).user.userId;
-  const { provider, apiKey } = req.body;
+  const { provider, apiKey, customUrl, customModel } = req.body;
 
   if (!AI_PROVIDER_LIST.includes(provider as AIProvider)) {
     return res.status(400).json({ error: 'پروایدر نامعتبر' });
   }
   if (!apiKey?.trim()) return res.status(400).json({ error: 'کلید API الزامی است' });
+  if (provider === 'custom') {
+    if (!customUrl?.trim() || !customModel?.trim()) {
+      return res.status(400).json({ error: 'برای پروایدر سفارشی، URL و مدل الزامی است' });
+    }
+  }
 
   const encrypted = encrypt(apiKey.trim());
   await query(
-    `INSERT INTO user_ai_keys (user_id, provider, api_key_enc, is_active)
-     VALUES (?, ?, ?, 1)
-     ON DUPLICATE KEY UPDATE api_key_enc=VALUES(api_key_enc), is_active=1`,
-    [userId, provider, encrypted]
+    `INSERT INTO user_ai_keys (user_id, provider, api_key_enc, custom_url, custom_model, is_active)
+     VALUES (?, ?, ?, ?, ?, 1)
+     ON DUPLICATE KEY UPDATE api_key_enc=VALUES(api_key_enc), custom_url=VALUES(custom_url), custom_model=VALUES(custom_model), is_active=1`,
+    [userId, provider, encrypted, customUrl?.trim() || null, customModel?.trim() || null]
   );
   return res.json({ success: true, message: `کلید ${provider} ذخیره شد` });
+}
+
+export async function testUserKey(req: Request, res: Response) {
+  const userId = (req as any).user.userId;
+  const { provider } = req.body;
+
+  if (!AI_PROVIDER_LIST.includes(provider as AIProvider)) {
+    return res.status(400).json({ error: 'پروایدر نامعتبر' });
+  }
+
+  try {
+    const { result, usedOwnKey } = await runAI(userId, provider as AIProvider, 'Reply with exactly: OK', 'test');
+    return res.json({
+      ok: true,
+      usedOwnKey,
+      sample: (result || '').slice(0, 200),
+      message: 'اتصال موفق بود',
+    });
+  } catch (err: any) {
+    return res.status(200).json({ ok: false, error: err.message });
+  }
 }
 
 export async function getUserKeys(req: Request, res: Response) {

@@ -9,6 +9,7 @@ import Monitoring   from './pages/Monitoring';
 import ContentList  from './pages/ContentList';
 import WPPosts      from './pages/WPPosts';
 import WPEditPost   from './pages/WPEditPost';
+import Categories   from './pages/Categories';
 import BottomNav    from './components/layout/BottomNav';
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -31,6 +32,7 @@ export default function App() {
         <Route path="/content" element={<ProtectedLayout><ContentList /></ProtectedLayout>} />
         <Route path="/wp-posts" element={<ProtectedLayout><WPPosts /></ProtectedLayout>} />
         <Route path="/wp-edit/:id" element={<ProtectedLayout><WPEditPost /></ProtectedLayout>} />
+        <Route path="/categories" element={<ProtectedLayout><Categories /></ProtectedLayout>} />
         <Route path="/create" element={<ProtectedLayout><CreateContent /></ProtectedLayout>} />
         <Route path="/settings" element={<ProtectedLayout><ApiSettings /></ProtectedLayout>} />
         <Route path="/media" element={<ProtectedLayout><MediaLibrary /></ProtectedLayout>} />

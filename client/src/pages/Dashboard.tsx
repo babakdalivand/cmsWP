@@ -82,8 +82,9 @@ export default function Dashboard() {
       <h3 className="text-white font-semibold mb-3">دسترسی سریع</h3>
       <div className="grid grid-cols-2 gap-3">
         <ActionBtn label="محتوای جدید"   icon="✏️" onClick={() => navigate('/create')}   primary />
-        <ActionBtn label="لیست محتوا"    icon="📋" onClick={() => navigate('/content')} />
+        <ActionBtn label="پست‌های سایت"   icon="📋" onClick={() => navigate('/wp-posts')} />
         <ActionBtn label="کتابخانه مدیا" icon="🖼️" onClick={() => navigate('/media')} />
+        <ActionBtn label="دسته‌بندی‌ها"  icon="📂" onClick={() => navigate('/categories')} />
         <ActionBtn label="تنظیمات AI"    icon="🤖" onClick={() => navigate('/settings')} />
       </div>
 

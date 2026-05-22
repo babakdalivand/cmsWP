@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { authMiddleware, requireAdmin } from '../middleware/auth';
 import { login, getMe, refreshTokens, logout } from '../auth/authController';
-import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota } from '../ai/aiController';
+import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey } from '../ai/aiController';
 import {
   listContent, getContent, createContent, updateContent,
   submitForReview, approveContent, rejectContent, deleteContent,
@@ -29,6 +29,7 @@ router.get('/ai/quota',             authMiddleware, quota);
 router.get('/ai/keys',              authMiddleware, getUserKeys);
 router.post('/ai/keys',             authMiddleware, saveUserKey);
 router.delete('/ai/keys/:provider', authMiddleware, deleteUserKey);
+router.post('/ai/test',             authMiddleware, testUserKey);
 
 // ── AI (async job queue) ──────────────────────────────────────────────────────
 router.post('/ai/job',      authMiddleware, postJob);
@@ -68,6 +69,21 @@ router.delete('/wp/posts/:id', authMiddleware, requireAdmin, async (req: Request
 router.get('/wp/categories', authMiddleware, async (_req: Request, res: Response) => {
   try { res.json(await getCategories()); }
   catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.post('/wp/categories', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try { res.json(await wpRequest('POST', '/categories', req.body)); }
+  catch (e: any) { res.status(500).json({ error: e.response?.data?.message || e.message }); }
+});
+
+router.put('/wp/categories/:id', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try { res.json(await wpRequest('POST', `/categories/${req.params.id}`, req.body)); }
+  catch (e: any) { res.status(500).json({ error: e.response?.data?.message || e.message }); }
+});
+
+router.delete('/wp/categories/:id', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try { res.json(await wpRequest('DELETE', `/categories/${req.params.id}`, null, { force: true })); }
+  catch (e: any) { res.status(500).json({ error: e.response?.data?.message || e.message }); }
 });
 
 router.get('/wp/media', authMiddleware, async (req: Request, res: Response) => {
