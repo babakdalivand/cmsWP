@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { authMiddleware, requireAdmin } from '../middleware/auth';
 import { login, getMe, refreshTokens, logout } from '../auth/authController';
-import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey } from '../ai/aiController';
+import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey, listOpenRouterModels } from '../ai/aiController';
 import {
   listContent, getContent, createContent, updateContent,
   submitForReview, approveContent, rejectContent, deleteContent,
@@ -30,6 +30,7 @@ router.get('/ai/keys',              authMiddleware, getUserKeys);
 router.post('/ai/keys',             authMiddleware, saveUserKey);
 router.delete('/ai/keys/:provider', authMiddleware, deleteUserKey);
 router.post('/ai/test',             authMiddleware, testUserKey);
+router.get('/ai/openrouter-models', authMiddleware, listOpenRouterModels);
 
 // ── AI (async job queue) ──────────────────────────────────────────────────────
 router.post('/ai/job',      authMiddleware, postJob);

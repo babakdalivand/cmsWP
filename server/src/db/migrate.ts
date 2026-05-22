@@ -111,6 +111,15 @@ const alterSql = [
   `ALTER TABLE users ADD COLUMN telegram_chat_id BIGINT NULL UNIQUE`,
   `ALTER TABLE user_ai_keys ADD COLUMN custom_url VARCHAR(500) NULL`,
   `ALTER TABLE user_ai_keys ADD COLUMN custom_model VARCHAR(200) NULL`,
+  `ALTER TABLE user_ai_keys ADD COLUMN nickname VARCHAR(100) NOT NULL DEFAULT ''`,
+  `ALTER TABLE user_ai_keys ADD COLUMN display_name VARCHAR(150) NULL`,
+];
+
+// Unique-key migration: switch from (user_id, provider) to (user_id, provider, nickname)
+// MySQL doesn't let DROP INDEX IF EXISTS until 8.0.29, so wrap in try/catch.
+const indexMigrationSql = [
+  { sql: 'ALTER TABLE user_ai_keys DROP INDEX uq_user_provider', ignoreErrors: [1091, 1176] }, // missing key
+  { sql: 'ALTER TABLE user_ai_keys ADD UNIQUE KEY uq_user_provider_nick (user_id, provider, nickname)', ignoreErrors: [1061] },
 ];
 
 // MySQL doesn't support CREATE INDEX IF NOT EXISTS — ignore duplicate key errors (1061)
@@ -142,6 +151,13 @@ export async function runMigrations(dbPool: Pool = pool): Promise<void> {
       } catch (err: any) {
         // 1060 = ER_DUP_FIELDNAME (column already exists) — safe to ignore
         if (err.errno !== 1060) throw err;
+      }
+    }
+    for (const step of indexMigrationSql) {
+      try {
+        await conn.execute(step.sql);
+      } catch (err: any) {
+        if (!step.ignoreErrors.includes(err.errno)) throw err;
       }
     }
     for (const sql of indexSql) {

@@ -79,12 +79,12 @@ async function callProvider(
   return res.data?.choices?.[0]?.message?.content || '';
 }
 
-async function getUserKey(userId: number, provider: AIProvider):
+async function getUserKey(userId: number, provider: AIProvider, nickname: string = ''):
   Promise<{ key: string; customUrl: string | null; customModel: string | null } | null>
 {
   const row = await queryOne<{ api_key_enc: string; custom_url: string | null; custom_model: string | null }>(
-    'SELECT api_key_enc, custom_url, custom_model FROM user_ai_keys WHERE user_id=? AND provider=? AND is_active=1',
-    [userId, provider]
+    'SELECT api_key_enc, custom_url, custom_model FROM user_ai_keys WHERE user_id=? AND provider=? AND nickname=? AND is_active=1',
+    [userId, provider, nickname]
   );
   if (!row) return null;
   try {
@@ -105,9 +105,10 @@ export async function runAI(
   userId: number,
   provider: AIProvider,
   prompt: string,
-  action: string
+  action: string,
+  nickname: string = ''
 ): Promise<{ result: string; usedOwnKey: boolean }> {
-  const stored = await getUserKey(userId, provider);
+  const stored = await getUserKey(userId, provider, nickname);
   let apiKey      = stored?.key ?? null;
   let customUrl   = stored?.customUrl ?? null;
   let customModel = stored?.customModel ?? null;
