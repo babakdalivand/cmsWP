@@ -1,7 +1,10 @@
 import axios, { AxiosError, InternalAxiosRequestConfig } from 'axios';
 import { useAuthStore } from '../store/authStore';
 
-export const api = axios.create({ baseURL: '/api', timeout: 30000 });
+export const api = axios.create({
+  baseURL: (import.meta.env.VITE_API_URL as string) || '/api',
+  timeout: 30000,
+});
 
 // Attach Bearer token to every request
 api.interceptors.request.use((cfg) => {
