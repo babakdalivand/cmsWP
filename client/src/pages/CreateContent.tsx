@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
-import { ChevronRight, Sparkles, RotateCw, Search, Send, Clock } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { ChevronRight, Sparkles, RotateCw, Search, Send, Clock, Upload, X, FileText, Image as ImageIcon, Film, Music } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { useCreateContent, useSubmitContent, usePostAIJob, useAIJob } from '../hooks/useQueries';
+import { useCreateContent, useSubmitContent, usePostAIJob, useAIJob, useUploadMedia } from '../hooks/useQueries';
 
 type Lang        = 'fa' | 'en' | 'both';
 type ContentType = 'article' | 'youtube' | 'podcast' | 'media';
@@ -19,6 +19,9 @@ export default function CreateContent() {
   const [form, setForm]     = useState({ title_fa: '', title_en: '', content_fa: '', content_en: '', youtube_url: '', podcast_url: '' });
   const [scheduledAt, setScheduledAt] = useState('');
   const [error, setError]   = useState('');
+  const [mediaFile, setMediaFile] = useState<{ id: number; url: string; type: string; filename: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const uploadMut = useUploadMedia();
 
   // AI job tracking: { jobId, targetField }
   const [aiJob, setAiJob] = useState<{ jobId: string; targetField: string } | null>(null);
@@ -59,12 +62,32 @@ export default function CreateContent() {
     try {
       const payload: any = { content_type: type, lang, ...form };
       if (scheduledAt) payload.scheduled_at = new Date(scheduledAt).toISOString();
+      if (mediaFile)   payload.featured_media = mediaFile.id;
 
       const { id } = await createMut.mutateAsync(payload);
       if (!asDraft && !scheduledAt) await submitMut.mutateAsync(id);
       navigate('/content');
     } catch (e: any) {
       setError(e.response?.data?.error || 'خطا در ذخیره');
+    }
+  }
+
+  async function handleFileChange(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setError('');
+    try {
+      const result = await uploadMut.mutateAsync(file);
+      setMediaFile({
+        id: result.id,
+        url: result.source_url,
+        type: result.mime_type || file.type,
+        filename: result.title?.rendered || file.name,
+      });
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'خطا در آپلود فایل');
+    } finally {
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   }
 
@@ -174,6 +197,82 @@ export default function CreateContent() {
             <input value={form.podcast_url} onChange={e => set('podcast_url', e.target.value)}
               placeholder="https://..." dir="ltr"
               className="w-full bg-bg border border-border rounded-lg px-3 py-3 text-white placeholder-label text-sm focus:outline-none focus:border-blue" />
+          </div>
+        )}
+
+        {/* Media upload */}
+        {type === 'media' && (
+          <div className="bg-surface border border-border rounded-xl p-4">
+            <label className="text-label text-xs mb-3 block">آپلود فایل (عکس، ویدیو، صدا، PDF)</label>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*,video/*,audio/*,.pdf"
+              onChange={handleFileChange}
+              className="hidden"
+            />
+
+            {!mediaFile ? (
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploadMut.isPending}
+                className="w-full border-2 border-dashed border-border rounded-xl p-8 flex flex-col items-center gap-2 text-label hover:text-blue hover:border-blue/40 transition-colors disabled:opacity-50"
+              >
+                {uploadMut.isPending ? (
+                  <>
+                    <span className="animate-spin text-2xl">⟳</span>
+                    <span className="text-sm">در حال آپلود...</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={32} strokeWidth={1.5} />
+                    <span className="text-sm font-medium">انتخاب فایل</span>
+                    <span className="text-xs opacity-70">حداکثر 20 مگابایت</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="bg-bg border border-border rounded-xl p-3">
+                {mediaFile.type.startsWith('image/') && (
+                  <img src={mediaFile.url} alt={mediaFile.filename}
+                       className="w-full max-h-64 object-contain rounded-lg mb-3" />
+                )}
+                {mediaFile.type.startsWith('video/') && (
+                  <video src={mediaFile.url} controls
+                         className="w-full max-h-64 rounded-lg mb-3" />
+                )}
+                {mediaFile.type.startsWith('audio/') && (
+                  <audio src={mediaFile.url} controls className="w-full mb-3" />
+                )}
+
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    {mediaFile.type.startsWith('image/') ? <ImageIcon size={16} className="text-blue flex-shrink-0" /> :
+                     mediaFile.type.startsWith('video/') ? <Film size={16} className="text-blue flex-shrink-0" /> :
+                     mediaFile.type.startsWith('audio/') ? <Music size={16} className="text-blue flex-shrink-0" /> :
+                     <FileText size={16} className="text-blue flex-shrink-0" />}
+                    <span className="text-white text-xs truncate" title={mediaFile.filename}
+                          dangerouslySetInnerHTML={{ __html: mediaFile.filename }} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setMediaFile(null)}
+                    className="text-danger hover:bg-danger/10 p-1.5 rounded-lg flex-shrink-0"
+                    title="حذف"
+                  >
+                    <X size={14} />
+                  </button>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="mt-2 w-full text-blue text-xs py-2 border border-blue/20 rounded-lg hover:bg-blue/10 transition-colors"
+                >
+                  جایگزینی فایل
+                </button>
+              </div>
+            )}
           </div>
         )}
 

@@ -155,6 +155,18 @@ export function useMedia(page = 1) {
   });
 }
 
+export function useUploadMedia() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api.post('/wp/media', fd, { headers: { 'Content-Type': 'multipart/form-data' } }).then(r => r.data);
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['media'] }),
+  });
+}
+
 export function useWPPosts(page = 1, search = '') {
   return useQuery({
     queryKey: QK.wpPosts(page, search),
