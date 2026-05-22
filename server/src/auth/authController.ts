@@ -19,7 +19,12 @@ async function validateViaWPAPI(username: string, password: string) {
       { username, password },
       { timeout: 8000 }
     );
-    return res.data?.token ? res.data : null;
+    // Two known formats:
+    //   Tmeister: { token, user_email, user_nicename, user_display_name, ... }
+    //   Useful Team: { success, data: { token, id, email, displayName, ... } }
+    const flat   = res.data?.token ? res.data : null;
+    const nested = res.data?.data?.token ? res.data.data : null;
+    return flat || nested;
   } catch {
     return null;
   }
@@ -95,9 +100,11 @@ export async function login(req: Request, res: Response) {
     let role = 'editor';
 
     if (wpToken) {
-      wpUser = wpToken.user_display_name
-        ? { id: wpToken.user_id, name: wpToken.user_display_name, email: wpToken.user_email, slug: username }
-        : null;
+      // Normalize across Tmeister and Useful Team JWT plugin formats
+      const wpId   = wpToken.id ?? wpToken.user_id ?? null;
+      const name   = wpToken.displayName ?? wpToken.user_display_name ?? wpToken.nicename ?? username;
+      const email  = wpToken.email ?? wpToken.user_email ?? null;
+      wpUser = wpId ? { id: wpId, name, email, slug: username } : null;
       role = wpToken.user_roles?.includes('administrator') ? 'admin' : 'editor';
     }
 
