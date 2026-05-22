@@ -85,7 +85,7 @@ app.get('/health', async (_req, res) => {
 });
 
 // ── Serve React static files (production only) ────────────────────────────────
-const clientBuild = path.join(__dirname, '..', 'client', 'dist');
+const clientBuild = path.join(__dirname, '..', '..', 'client', 'dist');
 app.use(express.static(clientBuild));
 app.get('*', (_req, res) => {
   const indexFile = path.join(clientBuild, 'index.html');
