@@ -52,6 +52,21 @@ export default function ContentList() {
         </button>
       </div>
 
+      <div className="flex gap-2 mb-4 bg-surface border border-border rounded-xl p-1">
+        <button
+          onClick={() => navigate('/wp-posts')}
+          className="flex-1 py-2 rounded-lg text-sm font-medium text-label hover:text-white transition-colors"
+        >
+          پست‌های سایت
+        </button>
+        <button
+          onClick={() => navigate('/content')}
+          className="flex-1 py-2 rounded-lg text-sm font-medium bg-blue text-white"
+        >
+          محتوای داخلی
+        </button>
+      </div>
+
       {/* Filter tabs */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-1">
         {['all', 'draft', 'pending', 'published', 'rejected'].map(s => (

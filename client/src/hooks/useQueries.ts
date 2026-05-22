@@ -10,6 +10,8 @@ export const QK = {
   aiKeys:     ['aiKeys']     as const,
   aiJob:      (id: string)     => ['aiJob', id]        as const,
   wpCats:     ['wpCats']     as const,
+  wpPosts:    (page: number, search: string) => ['wpPosts', page, search] as const,
+  wpPost:     (id: number) => ['wpPost', id] as const,
   media:      (page: number)   => ['media', page]      as const,
   logs:       (level?: string) => ['logs', level]      as const,
   aiStats:    ['aiStats']    as const,
@@ -150,6 +152,42 @@ export function useMedia(page = 1) {
   return useQuery({
     queryKey: QK.media(page),
     queryFn:  () => api.get('/wp/media', { params: { page, per_page: 20 } }).then(r => r.data),
+  });
+}
+
+export function useWPPosts(page = 1, search = '') {
+  return useQuery({
+    queryKey: QK.wpPosts(page, search),
+    queryFn:  () => api.get('/wp/posts', { params: { page, per_page: 20, search: search || undefined } }).then(r => r.data),
+    staleTime: 15_000,
+  });
+}
+
+export function useWPPost(id: number) {
+  return useQuery({
+    queryKey: QK.wpPost(id),
+    queryFn:  () => api.get(`/wp/posts/${id}`).then(r => r.data),
+    enabled: id > 0,
+  });
+}
+
+export function useUpdateWPPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: object }) =>
+      api.put(`/wp/posts/${id}`, payload).then(r => r.data),
+    onSuccess: (_, { id }) => {
+      qc.invalidateQueries({ queryKey: QK.wpPost(id) });
+      qc.invalidateQueries({ queryKey: ['wpPosts'] });
+    },
+  });
+}
+
+export function useDeleteWPPost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete(`/wp/posts/${id}`).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['wpPosts'] }),
   });
 }
 

@@ -7,7 +7,7 @@ import {
   listContent, getContent, createContent, updateContent,
   submitForReview, approveContent, rejectContent, deleteContent,
 } from '../content/contentController';
-import { getPosts, getCategories, uploadMedia, getMedia } from '../wp/wpProxy';
+import { getPosts, getCategories, uploadMedia, getMedia, updatePost, deletePost, wpRequest } from '../wp/wpProxy';
 import { query } from '../db/pool';
 
 const router = Router();
@@ -43,6 +43,21 @@ router.delete('/content/:id',       authMiddleware, deleteContent);
 // ── WordPress Proxy ───────────────────────────────────────────────────────────
 router.get('/wp/posts', authMiddleware, async (req: Request, res: Response) => {
   try { res.json(await getPosts(req.query as any)); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.get('/wp/posts/:id', authMiddleware, async (req: Request, res: Response) => {
+  try { res.json(await wpRequest('GET', `/posts/${req.params.id}`)); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.put('/wp/posts/:id', authMiddleware, async (req: Request, res: Response) => {
+  try { res.json(await updatePost(parseInt(req.params.id), req.body)); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+});
+
+router.delete('/wp/posts/:id', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try { res.json(await deletePost(parseInt(req.params.id))); }
   catch (e: any) { res.status(500).json({ error: e.message }); }
 });
 
