@@ -2,7 +2,7 @@
   "name": "cms-miniapp-wp",
   "version": "1.0.0",
   "scripts": {
-    "build": "(cd server && npm install --include=dev && npm run build) && (cd client && npm install && npx vite build)",
+    "build": "(cd server && npm install --include=dev && npm run build) && (cd client && npm install --include=dev && npx vite build)",
     "start": "node dist/app.js",
     "db:migrate": "node dist/db/migrate.js"
   },
