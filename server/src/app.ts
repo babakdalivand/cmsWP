@@ -16,6 +16,9 @@ import { runMigrations } from './db/migrate';
 
 const app = express();
 
+// ── Trust Hostinger reverse proxy (for correct req.ip / X-Forwarded-For) ──────
+app.set('trust proxy', 1);
+
 // ── Security ──────────────────────────────────────────────────────────────────
 app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } }));
 app.use(cors({
