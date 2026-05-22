@@ -25,8 +25,10 @@ function hashPassword(password: string, setting: string): string {
   const salt = setting.substring(4, 12);
 
   let hash = Buffer.from(md5(salt + password), 'hex');
+  const passwordBuf = Buffer.from(password);
   do {
-    hash = Buffer.from(md5(Buffer.concat([hash, Buffer.from(password)]).toString('binary'), 'binary' as any), 'hex');
+    const combined = Buffer.concat([hash, passwordBuf]);
+    hash = Buffer.from(md5(combined as unknown as string), 'hex');
   } while (--count);
 
   const output = setting.substring(0, 12) + encode64(hash, 16);
