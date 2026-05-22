@@ -1,4 +1,5 @@
 import { randomUUID } from 'crypto';
+import path from 'path';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -83,8 +84,15 @@ app.get('/health', async (_req, res) => {
   });
 });
 
-// ── 404 ───────────────────────────────────────────────────────────────────────
-app.use((_req, res) => res.status(404).json({ error: 'Not found' }));
+// ── Serve React static files (production only) ────────────────────────────────
+const clientBuild = path.join(__dirname, '..', 'client', 'dist');
+app.use(express.static(clientBuild));
+app.get('*', (_req, res) => {
+  const indexFile = path.join(clientBuild, 'index.html');
+  res.sendFile(indexFile, (err) => {
+    if (err) res.status(404).json({ error: 'Not found' });
+  });
+});
 
 // ── Global error handler ──────────────────────────────────────────────────────
 app.use((err: any, req: express.Request, res: express.Response, _next: express.NextFunction) => {
