@@ -2,18 +2,27 @@ import axios from 'axios';
 import { Request, Response } from 'express';
 import { config } from '../config';
 import { getPosts, wpRequest, createPost, updatePost, deletePost, uploadMedia } from '../wp/wpProxy';
+import { query, queryOne, queryInsert } from '../db/pool';
 import { logger } from '../monitoring/logger';
 
 const BOT_API = `https://api.telegram.org/bot${config.telegram.botToken}`;
 const ADMIN_CHAT_ID = config.telegram.adminChatId;
 
-// In-memory conversation state per chat
+// ── State machine ─────────────────────────────────────────────────────────────
 type State =
   | { mode: 'idle' }
   | { mode: 'awaiting_post_content'; title: string }
-  | { mode: 'awaiting_edit_field'; postId: number; field: 'title' | 'content' };
+  | { mode: 'awaiting_edit_field'; postId: number; field: 'title' | 'content' }
+  | { mode: 'awaiting_login_username' }
+  | { mode: 'awaiting_login_password'; username: string };
 
 const states = new Map<string, State>();
+
+interface AuthContext {
+  userId: number;       // 0 for hard-coded admin chat
+  role: 'admin' | 'editor';
+  username: string;
+}
 
 // ── Telegram helpers ──────────────────────────────────────────────────────────
 async function sendMessage(chatId: string | number, text: string, replyMarkup?: any) {
@@ -28,6 +37,12 @@ async function sendMessage(chatId: string | number, text: string, replyMarkup?: 
   } catch (err: any) {
     logger.error('sendMessage failed', { error: err.response?.data || err.message });
   }
+}
+
+async function deleteMessage(chatId: string | number, messageId: number) {
+  try {
+    await axios.post(`${BOT_API}/deleteMessage`, { chat_id: chatId, message_id: messageId });
+  } catch { /* user may have already deleted, ignore */ }
 }
 
 async function answerCallback(callbackId: string, text?: string) {
@@ -46,11 +61,6 @@ async function downloadTelegramFile(fileId: string): Promise<{ buffer: Buffer; m
   return { buffer: Buffer.from(res.data), mime, name };
 }
 
-function isAuthorized(chatId: string | number): boolean {
-  if (!ADMIN_CHAT_ID) return false;
-  return String(chatId) === String(ADMIN_CHAT_ID);
-}
-
 function stripHtml(s: string, max = 500): string {
   return s.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max);
 }
@@ -59,14 +69,97 @@ function escapeHtml(s: string): string {
   return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
+// ── Auth ──────────────────────────────────────────────────────────────────────
+async function authorizeChat(chatId: number): Promise<AuthContext | null> {
+  if (ADMIN_CHAT_ID && String(chatId) === String(ADMIN_CHAT_ID)) {
+    return { userId: 0, role: 'admin', username: 'admin' };
+  }
+  const row = await queryOne<{ id: number; role: string; username: string }>(
+    'SELECT id, role, username FROM users WHERE telegram_chat_id = ? AND is_active = 1',
+    [chatId]
+  );
+  if (!row) return null;
+  return { userId: row.id, role: row.role === 'admin' ? 'admin' : 'editor', username: row.username };
+}
+
+async function validateWPCredentials(username: string, password: string):
+  Promise<{ wpUserId: number; roles: string[]; email: string | null; displayName: string } | null>
+{
+  try {
+    const res = await axios.post(
+      `${config.wp.url}/wp-json/jwt-auth/v1/token`,
+      { username, password },
+      { timeout: 8000 }
+    );
+    const wpToken = res.data?.data?.token ? res.data.data : res.data;
+    if (!wpToken?.token) return null;
+
+    const wpUserId = wpToken.id ?? wpToken.user_id ?? null;
+    if (!wpUserId) return null;
+
+    let roles: string[] = wpToken.user_roles ?? [];
+    let displayName = wpToken.displayName ?? wpToken.user_display_name ?? wpToken.nicename ?? username;
+    let email       = wpToken.email ?? wpToken.user_email ?? null;
+
+    if (!roles.length) {
+      try {
+        const meRes = await axios.get(
+          `${config.wp.url}/wp-json/wp/v2/users/${wpUserId}?context=edit`,
+          { headers: { Authorization: `Bearer ${wpToken.token}` }, timeout: 8000 }
+        );
+        roles = meRes.data?.roles ?? [];
+        displayName = meRes.data?.name || displayName;
+        email = meRes.data?.email || email;
+      } catch { /* fall through */ }
+    }
+
+    return { wpUserId, roles, email, displayName };
+  } catch {
+    return null;
+  }
+}
+
+async function linkTelegramAccount(
+  wpUserId: number, chatId: number, username: string, displayName: string, email: string | null, roles: string[]
+): Promise<AuthContext> {
+  const role = roles.includes('administrator') ? 'admin' : 'editor';
+
+  // First, unlink any other user previously linked to this chatId (avoid UNIQUE collision)
+  await query('UPDATE users SET telegram_chat_id = NULL WHERE telegram_chat_id = ? AND wp_user_id <> ?', [chatId, wpUserId]);
+
+  const existing = await queryOne<{ id: number }>(
+    'SELECT id FROM users WHERE wp_user_id = ?',
+    [wpUserId]
+  );
+
+  let userId: number;
+  if (existing) {
+    await query(
+      'UPDATE users SET telegram_chat_id=?, display_name=?, email=?, role=?, updated_at=NOW() WHERE wp_user_id=?',
+      [chatId, displayName, email, role, wpUserId]
+    );
+    userId = existing.id;
+  } else {
+    userId = await queryInsert(
+      'INSERT INTO users (wp_user_id, username, display_name, email, role, telegram_chat_id) VALUES (?, ?, ?, ?, ?, ?)',
+      [wpUserId, username, displayName, email, role, chatId]
+    );
+  }
+
+  return { userId, role, username };
+}
+
+// Commands available without login
+const PUBLIC_COMMANDS = new Set(['/start', '/help', '/about', '/login', '/myid', '/id', '/cancel', '/app']);
+
 // ── Webhook entry ─────────────────────────────────────────────────────────────
 export async function handleWebhook(req: Request, res: Response) {
-  res.json({ ok: true }); // ack immediately so Telegram doesn't retry
+  res.json({ ok: true }); // ack immediately
 
   const update = req.body;
   try {
-    if (update.message)              await handleMessage(update.message);
-    else if (update.callback_query)  await handleCallback(update.callback_query);
+    if (update.message)             await handleMessage(update.message);
+    else if (update.callback_query) await handleCallback(update.callback_query);
   } catch (err: any) {
     logger.error('Bot webhook error', { error: err.message, stack: err.stack });
   }
@@ -75,14 +168,22 @@ export async function handleWebhook(req: Request, res: Response) {
 // ── Message router ────────────────────────────────────────────────────────────
 async function handleMessage(msg: any) {
   const chatId = msg.chat.id;
+  const auth   = await authorizeChat(chatId);
+  const state  = states.get(String(chatId)) || { mode: 'idle' as const };
 
-  if (!isAuthorized(chatId)) {
-    await sendMessage(chatId, `⛔ شما اجازه استفاده از این بات را ندارید.\nChat ID شما: <code>${chatId}</code>`);
+  // Login flow takes priority over everything else for current state
+  if (state.mode === 'awaiting_login_username' && msg.text) {
+    await handleLoginUsername(chatId, msg.text.trim());
+    return;
+  }
+  if (state.mode === 'awaiting_login_password' && msg.text) {
+    await handleLoginPassword(chatId, state.username, msg.text, msg.message_id);
     return;
   }
 
-  // Files first (photo / video / audio / document)
+  // Files require auth
   if (msg.photo || msg.video || msg.document || msg.audio || msg.voice) {
+    if (!auth) return promptLogin(chatId);
     await handleFileUpload(msg);
     return;
   }
@@ -90,52 +191,69 @@ async function handleMessage(msg: any) {
   const text = (msg.text || '').trim();
   if (!text) return;
 
-  // Commands always take precedence over conversation state
+  // Commands
   if (text.startsWith('/')) {
-    await handleCommand(chatId, text);
+    const cmd = text.split(/\s+/)[0].toLowerCase().split('@')[0];
+    if (!auth && !PUBLIC_COMMANDS.has(cmd)) {
+      return promptLogin(chatId);
+    }
+    await handleCommand(chatId, text, auth);
     return;
   }
 
-  // Continue an in-progress conversation
-  const state = states.get(String(chatId)) || { mode: 'idle' as const };
-
+  // Non-command text in active conversation
   if (state.mode === 'awaiting_post_content') {
+    if (!auth) return promptLogin(chatId);
     states.delete(String(chatId));
     await createNewPost(chatId, state.title, text);
     return;
   }
 
   if (state.mode === 'awaiting_edit_field') {
+    if (!auth) return promptLogin(chatId);
     states.delete(String(chatId));
     await applyEdit(chatId, state.postId, state.field, text);
     return;
   }
 
+  if (!auth) return promptLogin(chatId);
   await sendMessage(chatId, 'متوجه نشدم. /help برای راهنما.');
 }
 
+async function promptLogin(chatId: number) {
+  await sendMessage(chatId,
+    `🔒 برای استفاده از این بات ابتدا باید وارد شوید.\n\nدستور /login را بفرستید تا با حساب وردپرس خود وارد شوید.`);
+}
+
 // ── Commands ──────────────────────────────────────────────────────────────────
-async function handleCommand(chatId: number, text: string) {
+async function handleCommand(chatId: number, text: string, auth: AuthContext | null) {
   const parts = text.split(/\s+/);
   const cmd   = parts[0].toLowerCase().split('@')[0];
   const args  = parts.slice(1);
   const arg   = args.join(' ');
 
   switch (cmd) {
-    case '/start':  return sendWelcome(chatId);
-    case '/help':   return sendHelp(chatId);
+    // Public
+    case '/start':  return sendWelcome(chatId, auth);
+    case '/help':   return sendHelp(chatId, auth);
     case '/about':  return sendAbout(chatId);
+    case '/login':  return startLogin(chatId, auth);
+    case '/cancel': return cancelConversation(chatId);
+    case '/app':    return sendMessage(chatId, 'برای باز کردن مینی اپ روی دکمه پایین چت کلیک کن (🚀 ورود به اپ).');
+    case '/id':
+    case '/myid':   return sendMessage(chatId, `Chat ID: <code>${chatId}</code>`);
+
+    // Authenticated
+    case '/logout': return doLogout(chatId, auth!);
+    case '/me':     return showMe(chatId, auth!);
     case '/list':   return listPosts(chatId, parseInt(args[0]) || 1);
     case '/new':    return startNewPost(chatId, arg);
     case '/get':
     case '/view':   return viewPost(chatId, parseInt(args[0]));
     case '/edit':   return startEdit(chatId, parseInt(args[0]));
-    case '/delete': return askDelete(chatId, parseInt(args[0]));
-    case '/cancel': return cancelConversation(chatId);
-    case '/app':    return sendMessage(chatId, 'برای باز کردن مینی اپ روی دکمه پایین چت کلیک کن (🚀 ورود به اپ).');
-    case '/id':
-    case '/myid':   return sendMessage(chatId, `Chat ID: <code>${chatId}</code>`);
-    default:        return sendMessage(chatId, '⚠️ دستور ناشناخته. /help');
+    case '/delete': return askDelete(chatId, parseInt(args[0]), auth!);
+
+    default: return sendMessage(chatId, '⚠️ دستور ناشناخته. /help');
   }
 }
 
@@ -144,56 +262,151 @@ async function cancelConversation(chatId: number) {
   await sendMessage(chatId, '✅ لغو شد.');
 }
 
-async function sendWelcome(chatId: number) {
+async function sendWelcome(chatId: number, auth: AuthContext | null) {
   states.delete(String(chatId));
-  const text = `سلام! 👋 من <b>رها</b> هستم.
+  if (!auth) {
+    await sendMessage(chatId,
+      `سلام! 👋 من <b>رها</b> هستم.\n\nبرای استفاده از بات اول باید وارد بشی. دستور /login رو بفرست.\n\n🚀 یا می‌تونی روی دکمه پایین چت کلیک کنی تا مینی اپ باز بشه.`);
+    return;
+  }
 
-از طریق این بات می‌تونی پست‌های وردپرس رو مدیریت کنی — حتی وقتی مینی اپ لود نشه.
+  const text = `سلام <b>${escapeHtml(auth.username)}</b> 👋
 
 <b>📋 دستورات اصلی</b>
 /list — لیست پست‌ها
 /new <i>عنوان</i> — پست جدید
 /get <i>شماره</i> — مشاهده پست
-/edit <i>شماره</i> — ویرایش پست
-/delete <i>شماره</i> — حذف پست
+/edit <i>شماره</i> — ویرایش
+/delete <i>شماره</i> — حذف
+/me — وضعیت حساب
+/logout — خروج
 /help — راهنمای کامل
 
-<b>📎 آپلود فایل</b>
-عکس، ویدیو، صدا یا سند رو مستقیم بفرست تا به وردپرس آپلود بشه.
-
-<b>🚀 مینی اپ</b>
-دکمه پایین چت ⬇️`;
+📎 برای آپلود، فایل رو مستقیم بفرست.`;
   await sendMessage(chatId, text);
 }
 
-async function sendHelp(chatId: number) {
-  const text = `<b>📚 راهنمای کامل</b>
+async function sendHelp(chatId: number, auth: AuthContext | null) {
+  const loginNote = auth
+    ? `وارد شدید با: <b>${escapeHtml(auth.username)}</b> (${auth.role === 'admin' ? 'مدیر' : 'ویرایشگر'})`
+    : `<i>هنوز وارد نشدید. /login برای ورود.</i>`;
+
+  const text = `<b>📚 راهنما</b>
+
+${loginNote}
+
+<b>🔹 ورود</b>
+/login — ورود با یوزر/پس وردپرس
+/logout — خروج
+/me — حساب فعلی
 
 <b>🔹 مشاهده و مدیریت</b>
 /list [صفحه] — لیست پست‌ها (هر صفحه ۵ تا)
-/get <i>۳۱</i> — جزئیات پست شماره ۳۱
+/get <i>۳۱</i> — جزئیات پست
 /edit <i>۳۱</i> — انتخاب فیلد ویرایش
-/delete <i>۳۱</i> — حذف پست (با تأیید)
+/delete <i>۳۱</i> — حذف (فقط مدیر)
 
 <b>🔹 ایجاد پست</b>
 /new <i>عنوان پست</i>
-سپس متن پست رو ارسال کن. متن می‌تونه HTML داشته باشه.
+سپس متن پست رو بفرست.
 
 <b>🔹 آپلود مدیا</b>
-عکس / ویدیو / صدا / PDF رو مستقیم بفرست. URL مدیا برمی‌گرده.
+عکس / ویدیو / صدا / PDF رو بفرست.
 
 <b>🔹 سایر</b>
-/cancel — لغو عملیات در حال انجام
-/myid — شناسه چت شما
-/app — توضیح دسترسی به مینی اپ`;
+/cancel — لغو عملیات
+/myid — Chat ID شما`;
   await sendMessage(chatId, text);
 }
 
 async function sendAbout(chatId: number) {
   await sendMessage(chatId,
-    `🌿 <b>رها</b> — بات مدیریت محتوای وب‌سایت پرشین آتئیست\n\nنسخه ۱.۰ · ساخته شده با Claude Code`);
+    `🌿 <b>رها</b> — بات مدیریت محتوای وب‌سایت پرشین آتئیست\n\nنسخه ۱.۱ · ساخته شده با Claude Code`);
 }
 
+// ── Login / Logout ────────────────────────────────────────────────────────────
+async function startLogin(chatId: number, auth: AuthContext | null) {
+  if (auth) {
+    await sendMessage(chatId, `شما قبلاً وارد شدید با <b>${escapeHtml(auth.username)}</b>.\nبرای خروج: /logout`);
+    return;
+  }
+  states.set(String(chatId), { mode: 'awaiting_login_username' });
+  await sendMessage(chatId, `🔑 <b>ورود</b>\n\nنام کاربری وردپرس خودت رو بفرست.\nبرای لغو: /cancel`);
+}
+
+async function handleLoginUsername(chatId: number, username: string) {
+  if (username.startsWith('/')) {
+    states.delete(String(chatId));
+    await sendMessage(chatId, '✅ ورود لغو شد.');
+    return;
+  }
+  states.set(String(chatId), { mode: 'awaiting_login_password', username });
+  await sendMessage(chatId,
+    `🔐 رمز عبور وردپرس رو ارسال کن.\n\n⚠️ <b>توجه:</b> پیام رمز بلافاصله بعد از دریافت حذف می‌شود.\n\nلغو: /cancel`);
+}
+
+async function handleLoginPassword(chatId: number, username: string, password: string, msgId: number) {
+  // Always clear state first, even on errors
+  states.delete(String(chatId));
+
+  // Delete the password message right away
+  await deleteMessage(chatId, msgId);
+
+  if (password.startsWith('/')) {
+    await sendMessage(chatId, '✅ ورود لغو شد.');
+    return;
+  }
+
+  await sendMessage(chatId, '⏳ در حال اعتبارسنجی...');
+
+  const creds = await validateWPCredentials(username, password);
+  if (!creds) {
+    await sendMessage(chatId, '❌ نام کاربری یا رمز عبور اشتباه است. /login برای تلاش مجدد.');
+    return;
+  }
+
+  try {
+    const ctx = await linkTelegramAccount(
+      creds.wpUserId, chatId, username, creds.displayName, creds.email, creds.roles
+    );
+    const roleLabel = ctx.role === 'admin' ? 'مدیر' : 'ویرایشگر';
+    await sendMessage(chatId,
+      `✅ خوش اومدی <b>${escapeHtml(creds.displayName)}</b>!\n\nنقش: <b>${roleLabel}</b>\n\n/help برای راهنما`);
+  } catch (err: any) {
+    logger.error('Telegram link failed', { error: err.message });
+    await sendMessage(chatId, `❌ خطا در ذخیره حساب: ${escapeHtml(err.message)}`);
+  }
+}
+
+async function doLogout(chatId: number, auth: AuthContext) {
+  if (auth.userId === 0) {
+    await sendMessage(chatId, '⚠️ ادمین اصلی نمی‌تونه از طریق بات logout کنه.');
+    return;
+  }
+  await query('UPDATE users SET telegram_chat_id = NULL WHERE id = ?', [auth.userId]);
+  states.delete(String(chatId));
+  await sendMessage(chatId, '👋 خروج موفق. برای ورود مجدد: /login');
+}
+
+async function showMe(chatId: number, auth: AuthContext) {
+  if (auth.userId === 0) {
+    await sendMessage(chatId, `👤 <b>ادمین اصلی</b>\nChat ID: <code>${chatId}</code>\nنقش: مدیر`);
+    return;
+  }
+  const row = await queryOne<any>(
+    'SELECT username, display_name, email, role, created_at FROM users WHERE id = ?',
+    [auth.userId]
+  );
+  if (!row) return sendMessage(chatId, '❌ حساب پیدا نشد.');
+  await sendMessage(chatId,
+    `👤 <b>${escapeHtml(row.display_name || row.username)}</b>\n` +
+    `یوزرنیم: <code>${escapeHtml(row.username)}</code>\n` +
+    `ایمیل: ${escapeHtml(row.email || '-')}\n` +
+    `نقش: ${row.role === 'admin' ? 'مدیر' : 'ویرایشگر'}\n` +
+    `Chat ID: <code>${chatId}</code>`);
+}
+
+// ── Post operations ───────────────────────────────────────────────────────────
 async function listPosts(chatId: number, page: number) {
   try {
     const { posts, total, pages } = await getPosts({ page, per_page: 5 });
@@ -210,11 +423,10 @@ async function listPosts(chatId: number, page: number) {
       text += `${status} <b>#${p.id}</b> — ${escapeHtml(title)}\n   📅 ${date}\n\n`;
     }
 
-    const buttons: any[] = [];
     const nav: any[] = [];
     if (page > 1)     nav.push({ text: '◀️ قبلی', callback_data: `list:${page - 1}` });
     if (page < pages) nav.push({ text: 'بعدی ▶️', callback_data: `list:${page + 1}` });
-    if (nav.length) buttons.push(nav);
+    const buttons = nav.length ? [nav] : [];
 
     text += `<i>/get ۳۱ — مشاهده | /edit ۳۱ — ویرایش</i>`;
     await sendMessage(chatId, text, buttons.length ? { inline_keyboard: buttons } : undefined);
@@ -275,7 +487,7 @@ async function createNewPost(chatId: number, title: string, content: string) {
   try {
     const post = await createPost({ title, content, status: 'publish' });
     await sendMessage(chatId,
-      `✅ پست با موفقیت ساخته شد!\n\n<b>ID:</b> ${post.id}\n<b>عنوان:</b> ${escapeHtml(title)}\n<b>لینک:</b> ${post.link}`,
+      `✅ پست با موفقیت ساخته شد!\n\n<b>ID:</b> ${post.id}\n<b>عنوان:</b> ${escapeHtml(title)}`,
       { inline_keyboard: [[{ text: '🔗 مشاهده در سایت', url: post.link }]] });
   } catch (err: any) {
     await sendMessage(chatId, `❌ خطا در ایجاد پست: ${escapeHtml(err.message)}`);
@@ -305,7 +517,11 @@ async function applyEdit(chatId: number, id: number, field: 'title' | 'content',
   }
 }
 
-async function askDelete(chatId: number, id: number) {
+async function askDelete(chatId: number, id: number, auth: AuthContext) {
+  if (auth.role !== 'admin') {
+    await sendMessage(chatId, '⛔ فقط مدیر می‌تونه پست رو حذف کنه.');
+    return;
+  }
   if (!id) {
     await sendMessage(chatId, 'شماره پست رو بفرست. مثال: <code>/delete 31</code>');
     return;
@@ -323,14 +539,17 @@ async function handleCallback(query: any) {
   const chatId = query.message.chat.id;
   await answerCallback(query.id);
 
-  if (!isAuthorized(chatId)) return;
+  const auth = await authorizeChat(chatId);
+  if (!auth) {
+    await sendMessage(chatId, '🔒 برای انجام این عمل ابتدا وارد شوید: /login');
+    return;
+  }
 
   const data: string = query.data || '';
   const [action, ...args] = data.split(':');
 
-  if (action === 'list') {
-    return listPosts(chatId, parseInt(args[0]) || 1);
-  }
+  if (action === 'list')   return listPosts(chatId, parseInt(args[0]) || 1);
+  if (action === 'askdel') return askDelete(chatId, parseInt(args[0]), auth);
 
   if (action === 'edit') {
     const id    = parseInt(args[0]);
@@ -341,11 +560,11 @@ async function handleCallback(query: any) {
     return;
   }
 
-  if (action === 'askdel') {
-    return askDelete(chatId, parseInt(args[0]));
-  }
-
   if (action === 'delok') {
+    if (auth.role !== 'admin') {
+      await sendMessage(chatId, '⛔ فقط مدیر اجازه حذف داره.');
+      return;
+    }
     try {
       await deletePost(parseInt(args[0]));
       await sendMessage(chatId, `🗑 پست #${args[0]} حذف شد.`);
@@ -358,7 +577,6 @@ async function handleCallback(query: any) {
   if (action === 'cancel') {
     states.delete(String(chatId));
     await sendMessage(chatId, '✅ لغو شد.');
-    return;
   }
 }
 
@@ -398,7 +616,6 @@ async function handleFileUpload(msg: any) {
 
   try {
     const { buffer, mime, name } = await downloadTelegramFile(fileId);
-    // Prefer the file name we got from Telegram metadata if no extension was in path
     const finalName = (name.includes('.') ? name : fallbackName) || fallbackName;
     const result = await uploadMedia(buffer, finalName, mime);
     await sendMessage(chatId,

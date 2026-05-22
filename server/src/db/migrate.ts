@@ -3,16 +3,17 @@ import { Pool } from 'mysql2/promise';
 
 const tableSql = [
   `CREATE TABLE IF NOT EXISTS users (
-    id            INT AUTO_INCREMENT PRIMARY KEY,
-    wp_user_id    INT UNIQUE NOT NULL,
-    username      VARCHAR(100) NOT NULL,
-    display_name  VARCHAR(200),
-    email         VARCHAR(200),
-    role          VARCHAR(50) DEFAULT 'editor',
-    avatar_url    TEXT,
-    is_active     TINYINT(1) DEFAULT 1,
-    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
-    updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    id              INT AUTO_INCREMENT PRIMARY KEY,
+    wp_user_id      INT UNIQUE NOT NULL,
+    username        VARCHAR(100) NOT NULL,
+    display_name    VARCHAR(200),
+    email           VARCHAR(200),
+    role            VARCHAR(50) DEFAULT 'editor',
+    avatar_url      TEXT,
+    is_active       TINYINT(1) DEFAULT 1,
+    telegram_chat_id BIGINT NULL UNIQUE,
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
   `CREATE TABLE IF NOT EXISTS user_ai_keys (
@@ -104,6 +105,12 @@ const tableSql = [
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 ];
 
+// Backfill schema changes for installs that pre-date a column addition.
+// MySQL doesn't support ADD COLUMN IF NOT EXISTS — ignore 1060 (ER_DUP_FIELDNAME).
+const alterSql = [
+  `ALTER TABLE users ADD COLUMN telegram_chat_id BIGINT NULL UNIQUE`,
+];
+
 // MySQL doesn't support CREATE INDEX IF NOT EXISTS — ignore duplicate key errors (1061)
 const indexSql = [
   `CREATE INDEX idx_ai_usage_user_date    ON ai_usage(user_id, used_at)`,
@@ -126,6 +133,14 @@ export async function runMigrations(dbPool: Pool = pool): Promise<void> {
   try {
     for (const sql of tableSql) {
       await conn.execute(sql);
+    }
+    for (const sql of alterSql) {
+      try {
+        await conn.execute(sql);
+      } catch (err: any) {
+        // 1060 = ER_DUP_FIELDNAME (column already exists) — safe to ignore
+        if (err.errno !== 1060) throw err;
+      }
     }
     for (const sql of indexSql) {
       try {
