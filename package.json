@@ -1,0 +1,12 @@
+{
+  "name": "cms-miniapp-wp",
+  "version": "1.0.0",
+  "scripts": {
+    "build": "cd server && npm install --production && npm run build",
+    "start": "node server/dist/app.js",
+    "db:migrate": "node server/dist/db/migrate.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
