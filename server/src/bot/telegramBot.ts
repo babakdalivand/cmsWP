@@ -42,7 +42,7 @@ async function downloadTelegramFile(fileId: string): Promise<{ buffer: Buffer; m
   const fileUrl  = `https://api.telegram.org/file/bot${config.telegram.botToken}/${filePath}`;
   const res = await axios.get(fileUrl, { responseType: 'arraybuffer' });
   const name = filePath.split('/').pop() || 'upload';
-  const mime = res.headers['content-type'] || 'application/octet-stream';
+  const mime = (res.headers['content-type'] as string) || 'application/octet-stream';
   return { buffer: Buffer.from(res.data), mime, name };
 }
 
