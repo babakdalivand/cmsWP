@@ -8,10 +8,14 @@ import {
   submitForReview, approveContent, rejectContent, deleteContent,
 } from '../content/contentController';
 import { getPosts, getCategories, uploadMedia, getMedia, updatePost, deletePost, wpRequest } from '../wp/wpProxy';
+import { handleWebhook } from '../bot/telegramBot';
 import { query } from '../db/pool';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
+
+// ── Telegram bot webhook (no auth — secret comes via URL path) ───────────────
+router.post('/telegram/webhook', handleWebhook);
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 router.post('/auth/login',   login);
