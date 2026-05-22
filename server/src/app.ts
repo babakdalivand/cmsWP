@@ -12,6 +12,7 @@ import { startScheduler } from './scheduler/scheduler';
 import { startBackupScheduler, runBackup } from './backup/backup';
 import { authMiddleware, requireAdmin } from './middleware/auth';
 import { pool } from './db/pool';
+import { runMigrations } from './db/migrate';
 
 const app = express();
 
@@ -102,10 +103,17 @@ app.use((err: any, req: express.Request, res: express.Response, _next: express.N
 });
 
 // ── Start ─────────────────────────────────────────────────────────────────────
-app.listen(config.port, () => {
-  logger.info(`🚀 Server running on port ${config.port} [${config.nodeEnv}]`);
-  startScheduler();
-  startBackupScheduler();
-});
+runMigrations()
+  .then(() => {
+    app.listen(config.port, () => {
+      logger.info(`🚀 Server running on port ${config.port} [${config.nodeEnv}]`);
+      startScheduler();
+      startBackupScheduler();
+    });
+  })
+  .catch(err => {
+    logger.error('Migration failed, aborting startup', { error: err.message });
+    process.exit(1);
+  });
 
 export default app;

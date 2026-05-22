@@ -1,7 +1,7 @@
 import { pool } from './pool';
+import { Pool } from 'mysql2/promise';
 
-const statements = [
-  // Users table
+const tableSql = [
   `CREATE TABLE IF NOT EXISTS users (
     id            INT AUTO_INCREMENT PRIMARY KEY,
     wp_user_id    INT UNIQUE NOT NULL,
@@ -15,7 +15,6 @@ const statements = [
     updated_at    DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // AI Keys (encrypted)
   `CREATE TABLE IF NOT EXISTS user_ai_keys (
     id           INT AUTO_INCREMENT PRIMARY KEY,
     user_id      INT NOT NULL,
@@ -27,7 +26,6 @@ const statements = [
     CONSTRAINT fk_aikeys_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // AI usage & quota
   `CREATE TABLE IF NOT EXISTS ai_usage (
     id           INT AUTO_INCREMENT PRIMARY KEY,
     user_id      INT NOT NULL,
@@ -41,7 +39,6 @@ const statements = [
     CONSTRAINT fk_aiusage_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // AI async jobs (job queue persistence)
   `CREATE TABLE IF NOT EXISTS ai_jobs (
     id         VARCHAR(36) PRIMARY KEY,
     user_id    INT NOT NULL,
@@ -56,7 +53,6 @@ const statements = [
     CONSTRAINT fk_aijobs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // Content staging (with scheduling support)
   `CREATE TABLE IF NOT EXISTS content_staging (
     id             INT AUTO_INCREMENT PRIMARY KEY,
     user_id        INT,
@@ -86,7 +82,6 @@ const statements = [
     CONSTRAINT fk_content_approver FOREIGN KEY (approved_by) REFERENCES users(id) ON DELETE SET NULL
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // Refresh tokens (rotation-based security)
   `CREATE TABLE IF NOT EXISTS refresh_tokens (
     id          INT AUTO_INCREMENT PRIMARY KEY,
     user_id     INT NOT NULL,
@@ -99,7 +94,6 @@ const statements = [
     CONSTRAINT fk_rt_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
 
-  // System logs
   `CREATE TABLE IF NOT EXISTS system_logs (
     id         INT AUTO_INCREMENT PRIMARY KEY,
     level      VARCHAR(20) NOT NULL,
@@ -108,37 +102,51 @@ const statements = [
     meta       JSON,
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
   ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
-
-  // Indexes
-  `CREATE INDEX IF NOT EXISTS idx_ai_usage_user_date    ON ai_usage(user_id, used_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_ai_usage_date          ON ai_usage(used_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_ai_jobs_user_status    ON ai_jobs(user_id, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_ai_jobs_created        ON ai_jobs(created_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_content_status         ON content_staging(status)`,
-  `CREATE INDEX IF NOT EXISTS idx_content_user_status    ON content_staging(user_id, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_content_scheduled      ON content_staging(scheduled_at, status)`,
-  `CREATE INDEX IF NOT EXISTS idx_logs_created           ON system_logs(created_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_logs_level             ON system_logs(level)`,
-  `CREATE INDEX IF NOT EXISTS idx_users_wp_id            ON users(wp_user_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_ai_keys_user_provider  ON user_ai_keys(user_id, provider)`,
-  `CREATE INDEX IF NOT EXISTS idx_rt_user                ON refresh_tokens(user_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_rt_hash                ON refresh_tokens(token_hash)`,
 ];
 
-async function migrate() {
-  const conn = await pool.getConnection();
+// MySQL doesn't support CREATE INDEX IF NOT EXISTS — ignore duplicate key errors (1061)
+const indexSql = [
+  `CREATE INDEX idx_ai_usage_user_date    ON ai_usage(user_id, used_at)`,
+  `CREATE INDEX idx_ai_usage_date          ON ai_usage(used_at)`,
+  `CREATE INDEX idx_ai_jobs_user_status    ON ai_jobs(user_id, status)`,
+  `CREATE INDEX idx_ai_jobs_created        ON ai_jobs(created_at)`,
+  `CREATE INDEX idx_content_status         ON content_staging(status)`,
+  `CREATE INDEX idx_content_user_status    ON content_staging(user_id, status)`,
+  `CREATE INDEX idx_content_scheduled      ON content_staging(scheduled_at, status)`,
+  `CREATE INDEX idx_logs_created           ON system_logs(created_at)`,
+  `CREATE INDEX idx_logs_level             ON system_logs(level)`,
+  `CREATE INDEX idx_users_wp_id            ON users(wp_user_id)`,
+  `CREATE INDEX idx_ai_keys_user_provider  ON user_ai_keys(user_id, provider)`,
+  `CREATE INDEX idx_rt_user                ON refresh_tokens(user_id)`,
+  `CREATE INDEX idx_rt_hash                ON refresh_tokens(token_hash)`,
+];
+
+export async function runMigrations(dbPool: Pool = pool): Promise<void> {
+  const conn = await dbPool.getConnection();
   try {
-    for (const sql of statements) {
+    for (const sql of tableSql) {
       await conn.execute(sql);
     }
+    for (const sql of indexSql) {
+      try {
+        await conn.execute(sql);
+      } catch (err: any) {
+        // 1061 = ER_DUP_KEYNAME (index already exists) — safe to ignore
+        if (err.errno !== 1061) throw err;
+      }
+    }
     console.log('✅ Database migration complete');
-  } catch (err) {
-    console.error('❌ Migration failed:', err);
-    process.exit(1);
   } finally {
     conn.release();
-    await pool.end();
   }
 }
 
-migrate();
+// Standalone script entry point
+if (require.main === module) {
+  runMigrations()
+    .then(() => pool.end())
+    .catch(err => {
+      console.error('❌ Migration failed:', err);
+      pool.end().finally(() => process.exit(1));
+    });
+}
