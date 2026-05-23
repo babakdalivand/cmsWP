@@ -9,6 +9,11 @@
   },
   "dependencies": {
     "@tanstack/react-query": "^5.50.1",
+    "@tiptap/extension-link": "^2.10.3",
+    "@tiptap/extension-placeholder": "^2.10.3",
+    "@tiptap/pm": "^2.10.3",
+    "@tiptap/react": "^2.10.3",
+    "@tiptap/starter-kit": "^2.10.3",
     "axios": "^1.7.2",
     "lucide-react": "^0.407.0",
     "react": "^18.3.1",

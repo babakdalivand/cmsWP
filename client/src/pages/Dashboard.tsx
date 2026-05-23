@@ -2,6 +2,7 @@ import { CheckCircle, Clock, FileText, Sparkles, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useStats, useQuota } from '../hooks/useQueries';
+import ThemeToggle from '../components/ui/ThemeToggle';
 
 export default function Dashboard() {
   const user     = useAuthStore((s) => s.user);
@@ -18,15 +19,18 @@ export default function Dashboard() {
   return (
     <div className="p-5 pb-28" dir="rtl">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <div className="w-12 h-12 rounded-full bg-blue/20 border border-blue/30 flex items-center justify-center text-blue font-bold text-lg">
-          {user?.displayName?.charAt(0) || 'U'}
+      <div className="flex items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full bg-blue/20 border border-blue/30 flex items-center justify-center text-blue font-bold text-lg">
+            {user?.displayName?.charAt(0) || 'U'}
+          </div>
+          <div>
+            <p className="text-label text-xs">خوش آمدید</p>
+            <h2 className="text-text font-bold text-lg">{user?.displayName || user?.username}</h2>
+            <p className="text-label text-xs">{user?.role === 'admin' ? 'مدیر سیستم' : 'ویرایشگر'}</p>
+          </div>
         </div>
-        <div>
-          <p className="text-label text-xs">خوش آمدید</p>
-          <h2 className="text-white font-bold text-lg">{user?.displayName || user?.username}</h2>
-          <p className="text-label text-xs">{user?.role === 'admin' ? 'مدیر سیستم' : 'ویرایشگر'}</p>
-        </div>
+        <ThemeToggle />
       </div>
 
       {/* AI Quota Ring */}

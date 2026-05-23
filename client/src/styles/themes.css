@@ -1,0 +1,76 @@
+/* ── Dark theme (default) ──────────────────────────────────────────────── */
+:root,
+:root[data-theme="dark"] {
+  --bg:           #0B0B0C;
+  --surface:      #161618;
+  --surface-2:   #1C1C1F;
+  --border:       #1E1E21;
+  --text:         #FFFFFF;
+  --text-muted:   #8E8E93;
+  --label:        #8E8E93;
+  --primary:      #0066FF;
+  --primary-hover:#0052CC;
+  --primary-soft: rgba(0, 102, 255, 0.10);
+  --success:      #34C759;
+  --warning:      #FF9500;
+  --danger:       #FF3B30;
+
+  /* Neumorphism shadows (dark) */
+  --shadow-soft:
+    8px 8px 16px rgba(0, 0, 0, 0.4),
+   -8px -8px 16px rgba(40, 40, 45, 0.35);
+  --shadow-inset:
+    inset 4px 4px 8px rgba(0, 0, 0, 0.4),
+    inset -4px -4px 8px rgba(40, 40, 45, 0.25);
+}
+
+/* ── Light theme — warm Deep-Teal palette ─────────────────────────────── */
+:root[data-theme="light"] {
+  --bg:           #F5F1EA;          /* warm cream */
+  --surface:      #FAF6EF;          /* lighter card */
+  --surface-2:   #FFFDF7;          /* even lighter for nested */
+  --border:       #E2DCD0;
+  --text:         #1A2929;          /* near-black with teal hint */
+  --text-muted:   #5E6E70;
+  --label:        #6F7C7E;
+  --primary:      #0F5257;          /* deep teal */
+  --primary-hover:#0B3D40;
+  --primary-soft: rgba(15, 82, 87, 0.10);
+  --success:      #1E7F4D;
+  --warning:      #C77A20;
+  --danger:       #B5322A;
+
+  /* Neumorphism shadows (light) */
+  --shadow-soft:
+    8px 8px 18px rgba(180, 165, 140, 0.35),
+   -8px -8px 18px rgba(255, 253, 247, 0.95);
+  --shadow-inset:
+    inset 4px 4px 10px rgba(180, 165, 140, 0.25),
+    inset -4px -4px 10px rgba(255, 253, 247, 0.85);
+}
+
+/* Smooth color transitions when theme switches */
+:root,
+:root *:not([data-no-theme-transition]) {
+  transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+html, body {
+  background: var(--bg);
+  color:       var(--text);
+}
+
+/* ── Theme-toggle morph animation ─────────────────────────────────────── */
+.theme-morph-overlay {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  clip-path: circle(0% at var(--morph-x, 100%) var(--morph-y, 0%));
+  background: var(--bg);
+  transition: clip-path 0.65s cubic-bezier(0.83, 0, 0.17, 1);
+}
+
+.theme-morph-overlay.expanding {
+  clip-path: circle(150% at var(--morph-x, 100%) var(--morph-y, 0%));
+}
