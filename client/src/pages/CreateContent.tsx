@@ -6,6 +6,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import {
   useCreateContent, useSubmitContent, usePostAIJob, useAIJob, useUploadMedia,
+  useWPCategories,
 } from '../hooks/useQueries';
 import RichTextEditor from '../components/ui/RichTextEditor';
 
@@ -44,8 +45,12 @@ export default function CreateContent() {
   });
   const [featured, setFeatured] = useState<MediaInfo | null>(null);  // featured image (always available)
   const [mediaFile, setMediaFile] = useState<MediaInfo | null>(null); // file for 'media' type
+  const [categoryIds, setCategoryIds] = useState<number[]>([]);
   const [scheduledAt, setScheduledAt] = useState('');
   const [error, setError] = useState('');
+
+  // Categories
+  const { data: categories = [] } = useWPCategories();
 
   // ── AI job ───────────────────────────────────────────────────────────────
   const [aiJob, setAiJob] = useState<{ jobId: string; targetField: string } | null>(null);
@@ -126,6 +131,7 @@ export default function CreateContent() {
       if (scheduledAt) payload.scheduled_at = new Date(scheduledAt).toISOString();
       // Featured media priority: explicit featured > inline media file
       payload.featured_media = featured?.id ?? mediaFile?.id ?? undefined;
+      if (categoryIds.length) payload.categories = categoryIds;
 
       const { id } = await createMut.mutateAsync(payload);
       if (!asDraft && !scheduledAt) await submitMut.mutateAsync(id);
@@ -324,7 +330,47 @@ export default function CreateContent() {
         </Section>
       )}
 
-      {/* ── 8. Schedule ─────────────────────────────────────────────── */}
+      {/* ── 8. Categories ───────────────────────────────────────────── */}
+      <Section title="دسته‌بندی‌ها" hint={`${categoryIds.length} انتخاب شده`}>
+        {categories.length === 0 ? (
+          <p className="text-label text-xs">
+            هنوز دسته‌بندی‌ای ساخته نشده. از صفحه{' '}
+            <button type="button" onClick={() => navigate('/categories')} className="text-blue underline">
+              دسته‌بندی‌ها
+            </button>{' '}
+            اضافه کنید.
+          </p>
+        ) : (
+          <div className="flex flex-wrap gap-2">
+            {categories.map((c: any) => {
+              const selected = categoryIds.includes(c.id);
+              return (
+                <button
+                  key={c.id}
+                  type="button"
+                  onClick={() =>
+                    setCategoryIds(ids =>
+                      selected ? ids.filter(id => id !== c.id) : [...ids, c.id]
+                    )
+                  }
+                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
+                    selected
+                      ? 'bg-blue text-white border-blue'
+                      : 'bg-bg text-label border-border hover:text-text hover:border-blue/40'
+                  }`}
+                >
+                  {c.name}
+                  {c.count > 0 && (
+                    <span className="opacity-70 mr-1.5">({c.count})</span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </Section>
+
+      {/* ── 9. Schedule ─────────────────────────────────────────────── */}
       <Section>
         <div className="flex items-center gap-2 mb-2">
           <Clock size={14} className="text-label" />

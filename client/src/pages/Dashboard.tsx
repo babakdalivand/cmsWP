@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useStats, useQuota } from '../hooks/useQueries';
 import ThemeToggle from '../components/ui/ThemeToggle';
+import SoftCard from '../components/ui/SoftCard';
 
 export default function Dashboard() {
   const user     = useAuthStore((s) => s.user);
@@ -34,16 +35,16 @@ export default function Dashboard() {
       </div>
 
       {/* AI Quota Ring */}
-      <div className="bg-surface border border-border rounded-2xl p-5 mb-4 flex items-center gap-5">
+      <SoftCard padding="lg" className="mb-4 flex items-center gap-5">
         {quotaLoading ? (
           <div className="w-32 h-32 flex-shrink-0 rounded-full bg-border animate-pulse" />
         ) : (
           <div className="relative w-32 h-32 flex-shrink-0">
             <svg viewBox="0 0 128 128" className="w-full h-full -rotate-90">
-              <circle cx="64" cy="64" r={r} fill="none" stroke="#1E1E21" strokeWidth="10" />
+              <circle cx="64" cy="64" r={r} fill="none" stroke="var(--border)" strokeWidth="10" />
               <circle
                 cx="64" cy="64" r={r} fill="none"
-                stroke="#0066FF" strokeWidth="10"
+                stroke="var(--primary)" strokeWidth="10"
                 strokeDasharray={circ}
                 strokeDashoffset={dash}
                 strokeLinecap="round"
@@ -52,19 +53,19 @@ export default function Dashboard() {
             </svg>
             <div className="absolute inset-0 flex flex-col items-center justify-center">
               <Sparkles size={16} className="text-blue mb-1" />
-              <span className="text-white font-bold text-lg">{quota?.used ?? '-'}/{quota?.total ?? '-'}</span>
+              <span className="text-text font-bold text-lg">{quota?.used ?? '-'}/{quota?.total ?? '-'}</span>
               <span className="text-label text-xs">روزانه</span>
             </div>
           </div>
         )}
         <div>
-          <h3 className="text-white font-semibold mb-1">سهمیه AI امروز</h3>
+          <h3 className="text-text font-semibold mb-1">سهمیه AI امروز</h3>
           <p className="text-label text-sm">{quota?.remaining ?? '-'} درخواست باقی‌مانده</p>
           <p className="text-xs text-blue mt-2 cursor-pointer" onClick={() => navigate('/settings')}>
             افزودن کلید شخصی ←
           </p>
         </div>
-      </div>
+      </SoftCard>
 
       {/* Stats Grid */}
       {statsLoading ? (
@@ -83,7 +84,7 @@ export default function Dashboard() {
       )}
 
       {/* Quick Actions */}
-      <h3 className="text-white font-semibold mb-3">دسترسی سریع</h3>
+      <h3 className="text-text font-semibold mb-3">دسترسی سریع</h3>
       <div className="grid grid-cols-2 gap-3">
         <ActionBtn label="محتوای جدید"   icon="✏️" onClick={() => navigate('/create')}   primary />
         <ActionBtn label="پست‌های سایت"   icon="📋" onClick={() => navigate('/wp-posts')} />
@@ -105,11 +106,11 @@ export default function Dashboard() {
 
 function StatCard({ icon, label, value, color }: { icon: React.ReactNode; label: string; value?: number; color: string }) {
   return (
-    <div className="bg-surface border border-border rounded-xl p-4 flex flex-col gap-2">
+    <SoftCard padding="md" className="flex flex-col gap-2">
       {icon}
       <span className={`text-2xl font-bold ${color}`}>{value ?? '—'}</span>
       <span className="text-label text-xs">{label}</span>
-    </div>
+    </SoftCard>
   );
 }
 
@@ -117,10 +118,10 @@ function ActionBtn({ label, icon, onClick, primary }: { label: string; icon: str
   return (
     <button
       onClick={onClick}
-      className={`rounded-xl p-4 flex items-center gap-3 font-medium text-sm transition-colors ${
+      className={`rounded-2xl p-4 flex items-center gap-3 font-medium text-sm transition-all shadow-soft hover:scale-[1.02] active:scale-[0.98] ${
         primary
-          ? 'bg-blue/20 border border-blue/40 text-blue hover:bg-blue/30'
-          : 'bg-surface border border-border text-white hover:border-blue/40'
+          ? 'bg-blue/15 border border-blue/30 text-blue'
+          : 'bg-surface text-text'
       }`}
     >
       <span className="text-xl">{icon}</span>
