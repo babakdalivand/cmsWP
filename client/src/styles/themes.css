@@ -2,23 +2,23 @@
 :root,
 :root[data-theme="dark"] {
   --bg:           #0B0B0C;
-  --surface:      #161618;
-  --surface-2:    #1C1C1F;
-  --border:       #232328;
+  --surface:      #1A1A1E;          /* slightly lighter so cards stand out */
+  --surface-2:    #232328;
+  --border:       #2E2E35;          /* more visible border */
   --text:         #FFFFFF;
   --text-muted:   #B8B8BD;
   --label:        #8E8E93;
-  --primary:      #4FB3B0;          /* teal accent — same hue as light, slightly brighter */
+  --primary:      #4FB3B0;          /* teal accent — same hue family as light */
   --primary-hover:#5FC7C4;
-  --primary-soft: rgba(79, 179, 176, 0.12);
+  --primary-soft: rgba(79, 179, 176, 0.14);
   --success:      #34C759;
   --warning:      #FF9500;
   --danger:       #FF3B30;
 
-  /* Neumorphism shadows (dark) */
+  /* Subtle depth in dark; border carries most of the contrast */
   --shadow-soft:
-    6px 6px 16px rgba(0, 0, 0, 0.55),
-   -6px -6px 16px rgba(40, 40, 45, 0.30);
+    0 4px 14px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.03);
   --shadow-inset:
     inset 3px 3px 7px rgba(0, 0, 0, 0.45),
     inset -3px -3px 7px rgba(40, 40, 45, 0.20);

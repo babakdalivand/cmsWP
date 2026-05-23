@@ -118,10 +118,10 @@ function ActionBtn({ label, icon, onClick, primary }: { label: string; icon: str
   return (
     <button
       onClick={onClick}
-      className={`rounded-2xl p-4 flex items-center gap-3 font-medium text-sm transition-all shadow-soft hover:scale-[1.02] active:scale-[0.98] ${
+      className={`rounded-2xl p-4 flex items-center gap-3 font-medium text-sm transition-all shadow-soft hover:scale-[1.02] active:scale-[0.98] border ${
         primary
-          ? 'bg-blue/15 border border-blue/30 text-blue'
-          : 'bg-surface text-text'
+          ? 'bg-blue/15 border-blue/40 text-blue'
+          : 'bg-surface border-border text-text hover:border-blue/40'
       }`}
     >
       <span className="text-xl">{icon}</span>
