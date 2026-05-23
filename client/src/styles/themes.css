@@ -3,50 +3,50 @@
 :root[data-theme="dark"] {
   --bg:           #0B0B0C;
   --surface:      #161618;
-  --surface-2:   #1C1C1F;
-  --border:       #1E1E21;
+  --surface-2:    #1C1C1F;
+  --border:       #232328;
   --text:         #FFFFFF;
-  --text-muted:   #8E8E93;
+  --text-muted:   #B8B8BD;
   --label:        #8E8E93;
-  --primary:      #0066FF;
-  --primary-hover:#0052CC;
-  --primary-soft: rgba(0, 102, 255, 0.10);
+  --primary:      #4FB3B0;          /* teal accent — same hue as light, slightly brighter */
+  --primary-hover:#5FC7C4;
+  --primary-soft: rgba(79, 179, 176, 0.12);
   --success:      #34C759;
   --warning:      #FF9500;
   --danger:       #FF3B30;
 
   /* Neumorphism shadows (dark) */
   --shadow-soft:
-    8px 8px 16px rgba(0, 0, 0, 0.4),
-   -8px -8px 16px rgba(40, 40, 45, 0.35);
+    6px 6px 16px rgba(0, 0, 0, 0.55),
+   -6px -6px 16px rgba(40, 40, 45, 0.30);
   --shadow-inset:
-    inset 4px 4px 8px rgba(0, 0, 0, 0.4),
-    inset -4px -4px 8px rgba(40, 40, 45, 0.25);
+    inset 3px 3px 7px rgba(0, 0, 0, 0.45),
+    inset -3px -3px 7px rgba(40, 40, 45, 0.20);
 }
 
-/* ── Light theme — warm Deep-Teal palette ─────────────────────────────── */
+/* ── Light theme — warm Deep-Teal palette inspired by RAHA brand ──────── */
 :root[data-theme="light"] {
-  --bg:           #F5F1EA;          /* warm cream */
-  --surface:      #FAF6EF;          /* lighter card */
-  --surface-2:   #FFFDF7;          /* even lighter for nested */
-  --border:       #E2DCD0;
-  --text:         #1A2929;          /* near-black with teal hint */
-  --text-muted:   #5E6E70;
-  --label:        #6F7C7E;
-  --primary:      #0F5257;          /* deep teal */
-  --primary-hover:#0B3D40;
-  --primary-soft: rgba(15, 82, 87, 0.10);
-  --success:      #1E7F4D;
-  --warning:      #C77A20;
-  --danger:       #B5322A;
+  --bg:           #EFE7D4;          /* warm cream */
+  --surface:      #F8F1DE;          /* lighter card */
+  --surface-2:    #FBF6E8;          /* nested */
+  --border:       rgba(31, 90, 88, 0.12);
+  --text:         #1A3A3A;          /* deep teal-tinted near-black */
+  --text-muted:   #4A6868;
+  --label:        #5F7676;
+  --primary:      #1F6562;          /* RAHA deep teal */
+  --primary-hover:#164946;
+  --primary-soft: rgba(31, 101, 98, 0.10);
+  --success:      #2D7D52;
+  --warning:      #B36B14;
+  --danger:       #A02E25;
 
-  /* Neumorphism shadows (light) */
+  /* Neumorphism shadows (light) — warm, soft, visible */
   --shadow-soft:
-    8px 8px 18px rgba(180, 165, 140, 0.35),
-   -8px -8px 18px rgba(255, 253, 247, 0.95);
+    8px 8px 20px rgba(170, 145, 95, 0.30),
+   -8px -8px 20px rgba(255, 252, 240, 1);
   --shadow-inset:
-    inset 4px 4px 10px rgba(180, 165, 140, 0.25),
-    inset -4px -4px 10px rgba(255, 253, 247, 0.85);
+    inset 4px 4px 10px rgba(170, 145, 95, 0.22),
+    inset -4px -4px 10px rgba(255, 252, 240, 0.95);
 }
 
 /* Smooth color transitions when theme switches */
@@ -67,10 +67,33 @@ html, body {
   pointer-events: none;
   z-index: 9999;
   clip-path: circle(0% at var(--morph-x, 100%) var(--morph-y, 0%));
-  background: var(--bg);
   transition: clip-path 0.65s cubic-bezier(0.83, 0, 0.17, 1);
+  /* Background is set inline via JS using the NEXT theme's color */
 }
 
 .theme-morph-overlay.expanding {
   clip-path: circle(150% at var(--morph-x, 100%) var(--morph-y, 0%));
+}
+
+/* ── Force white-text on typography to honor theme (light mode fix) ──── */
+/* Tailwind's text-white is hardcoded to #fff which is invisible on cream
+   light bg. In light mode, remap only when applied to typography tags
+   (NOT buttons, which need white text on colored backgrounds). */
+:root[data-theme="light"] h1.text-white,
+:root[data-theme="light"] h2.text-white,
+:root[data-theme="light"] h3.text-white,
+:root[data-theme="light"] h4.text-white,
+:root[data-theme="light"] p.text-white,
+:root[data-theme="light"] span.text-white,
+:root[data-theme="light"] label.text-white,
+:root[data-theme="light"] div.text-white,
+:root[data-theme="light"] input.text-white,
+:root[data-theme="light"] textarea.text-white,
+:root[data-theme="light"] select.text-white {
+  color: var(--text);
+}
+
+/* Bottom nav background needs explicit handling because it uses surface/95 */
+:root[data-theme="light"] nav.bg-surface\/95 {
+  background: rgba(248, 241, 222, 0.95);
 }

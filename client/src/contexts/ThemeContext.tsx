@@ -44,21 +44,15 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     const x = originX ?? window.innerWidth - 24;
     const y = originY ?? 60;
 
+    // Cancel any in-flight overlay
+    overlayRef.current?.remove();
+
     const overlay = document.createElement('div');
     overlay.className = 'theme-morph-overlay';
     overlay.style.setProperty('--morph-x', `${x}px`);
     overlay.style.setProperty('--morph-y', `${y}px`);
-
-    // Pre-render with NEXT theme's bg color so the expanding circle reveals it
-    overlay.setAttribute('data-theme', next);
-    // Force inline background from the data-theme value
-    const tmp = document.createElement('div');
-    tmp.setAttribute('data-theme', next);
-    tmp.style.display = 'none';
-    document.body.appendChild(tmp);
-    const nextBg = getComputedStyle(tmp).getPropertyValue('--bg').trim();
-    document.body.removeChild(tmp);
-    overlay.style.background = nextBg;
+    // Hardcoded next-theme bg so the expanding circle is visible
+    overlay.style.background = next === 'dark' ? '#0B0B0C' : '#EFE7D4';
 
     document.body.appendChild(overlay);
     overlayRef.current = overlay;
@@ -72,9 +66,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
     // After morph completes, fade out and remove
     window.setTimeout(() => {
-      overlay.style.transition = 'opacity 0.25s ease';
+      overlay.style.transition = 'opacity 0.3s ease';
       overlay.style.opacity = '0';
-      window.setTimeout(() => overlay.remove(), 260);
+      window.setTimeout(() => {
+        overlay.remove();
+        if (overlayRef.current === overlay) overlayRef.current = null;
+      }, 320);
     }, 700);
   }, [theme]);
 
