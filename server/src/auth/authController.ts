@@ -30,11 +30,24 @@ async function validateViaWPAPI(username: string, password: string) {
   }
 }
 
+function pickAvatar(wpUser: any): string | null {
+  // WP REST `/users/{id}` returns avatar_urls = { '24': url, '48': url, '96': url }
+  // Some plugins return a `simple_local_avatar` { full } shape — try common keys.
+  const sizes = wpUser.avatar_urls;
+  if (sizes && typeof sizes === 'object') {
+    return sizes['96'] || sizes['48'] || sizes['24'] || Object.values(sizes)[0] as string || null;
+  }
+  if (wpUser.avatar_url) return wpUser.avatar_url;
+  if (wpUser.simple_local_avatar?.full) return wpUser.simple_local_avatar.full;
+  return null;
+}
+
 async function upsertUser(wpUser: any, role: string): Promise<number> {
   const wpId        = wpUser.id ?? wpUser.ID ?? null;
   const username    = wpUser.slug ?? wpUser.user_login ?? null;
   const displayName = wpUser.name ?? wpUser.display_name ?? null;
   const email       = wpUser.email ?? wpUser.user_email ?? null;
+  const avatarUrl   = pickAvatar(wpUser);
 
   const existing = await queryOne<{ id: number }>(
     'SELECT id FROM users WHERE wp_user_id = ?',
@@ -43,15 +56,15 @@ async function upsertUser(wpUser: any, role: string): Promise<number> {
 
   if (existing) {
     await query(
-      'UPDATE users SET display_name=?, email=?, role=?, updated_at=NOW() WHERE wp_user_id=?',
-      [displayName, email, role, wpId]
+      'UPDATE users SET display_name=?, email=?, role=?, avatar_url=?, updated_at=NOW() WHERE wp_user_id=?',
+      [displayName, email, role, avatarUrl, wpId]
     );
     return existing.id;
   }
 
   return queryInsert(
-    'INSERT INTO users (wp_user_id, username, display_name, email, role) VALUES (?, ?, ?, ?, ?)',
-    [wpId, username, displayName, email, role]
+    'INSERT INTO users (wp_user_id, username, display_name, email, role, avatar_url) VALUES (?, ?, ?, ?, ?, ?)',
+    [wpId, username, displayName, email, role, avatarUrl]
   );
 }
 
@@ -106,16 +119,21 @@ export async function login(req: Request, res: Response) {
       const email  = wpToken.email ?? wpToken.user_email ?? null;
       wpUser = wpId ? { id: wpId, name, email, slug: username } : null;
 
-      // Tmeister includes user_roles inline; Useful Team doesn't, so fetch via JWT
+      // Always fetch /users/{id} to enrich with roles + avatar_urls
+      // (JWT plugin responses omit avatar_urls; some omit roles too)
       let roles: string[] = wpToken.user_roles ?? [];
-      if (!roles.length && wpToken.token && wpId) {
+      if (wpToken.token && wpId) {
         try {
           const meRes = await axios.get(
             `${config.wp.url}/wp-json/wp/v2/users/${wpId}?context=edit`,
             { headers: { Authorization: `Bearer ${wpToken.token}` }, timeout: 8000 }
           );
-          roles = meRes.data?.roles ?? [];
-        } catch { /* fall through to default editor role */ }
+          if (!roles.length) roles = meRes.data?.roles ?? [];
+          if (meRes.data?.avatar_urls) wpUser.avatar_urls = meRes.data.avatar_urls;
+          if (meRes.data?.simple_local_avatar) wpUser.simple_local_avatar = meRes.data.simple_local_avatar;
+          if (!wpUser.email && meRes.data?.email) wpUser.email = meRes.data.email;
+          if (meRes.data?.name) wpUser.name = meRes.data.name;
+        } catch { /* fall through */ }
       }
       role = roles.includes('administrator') ? 'admin' : 'editor';
     }
@@ -152,7 +170,7 @@ export async function login(req: Request, res: Response) {
         displayName: wpUser.name || wpUser.display_name,
         email:       wpUser.email,
         role,
-        avatarUrl:   wpUser.avatar_urls?.['96'] || null,
+        avatarUrl:   pickAvatar(wpUser),
       },
     });
   } catch (err: any) {

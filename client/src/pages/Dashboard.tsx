@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react';
 import {
   CheckCircle, Clock, FileText, Sparkles, Plus,
   Image as ImageIcon, FolderTree, Cpu, ChevronLeft,
@@ -6,13 +7,36 @@ import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
 import { useStats, useQuota } from '../hooks/useQueries';
 import ThemeToggle from '../components/ui/ThemeToggle';
+import { api } from '../api/client';
 
 export default function Dashboard() {
   const user     = useAuthStore((s) => s.user);
+  const setUser  = useAuthStore.setState;
+  const token    = useAuthStore((s) => s.token);
   const navigate = useNavigate();
 
   const { data: stats, isLoading: statsLoading } = useStats();
   const { data: quota, isLoading: quotaLoading } = useQuota();
+
+  // Refresh user profile (avatar, name, role) from /auth/me on mount
+  useEffect(() => {
+    if (!token) return;
+    api.get('/auth/me').then((r) => {
+      const fresh = r.data;
+      if (!fresh) return;
+      const merged = {
+        id:          fresh.id,
+        wpUserId:    fresh.wp_user_id,
+        username:    fresh.username,
+        displayName: fresh.display_name,
+        email:       fresh.email,
+        role:        fresh.role,
+        avatarUrl:   fresh.avatar_url,
+      };
+      setUser((s: any) => ({ ...s, user: { ...s.user, ...merged } }));
+    }).catch(() => { /* silent */ });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
 
   const quotaPct = quota ? (quota.used / quota.total) * 100 : 0;
   const r    = 52;
@@ -32,12 +56,7 @@ export default function Dashboard() {
 
       {/* ── User pill ─────────────────────────────────────────────── */}
       <div className="raha-card mb-5 flex items-center gap-3 p-3">
-        <div
-          className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-white text-base flex-shrink-0"
-          style={{ background: 'var(--grad-primary)' }}
-        >
-          {user?.displayName?.charAt(0)?.toUpperCase() || 'U'}
-        </div>
+        <UserAvatar avatarUrl={user?.avatarUrl} displayName={user?.displayName || user?.username || ''} />
         <div className="flex-1 min-w-0">
           <p className="text-label text-[10px]">خوش آمدید</p>
           <p className="font-bold text-base truncate" style={{ color: 'var(--text)' }}>
@@ -149,6 +168,37 @@ export default function Dashboard() {
 }
 
 // ───────────────────────────────────────────────────────────────────────────
+
+function UserAvatar({ avatarUrl, displayName }: { avatarUrl?: string | null; displayName: string }) {
+  const [failed, setFailed] = useState(false);
+  const initial = displayName.charAt(0)?.toUpperCase() || 'U';
+
+  // Force Gravatar size up to 192 when we recognize the URL pattern
+  const src = avatarUrl
+    ? avatarUrl.replace(/([?&])s=\d+/, '$1s=192')
+    : null;
+
+  if (src && !failed) {
+    return (
+      <img
+        src={src}
+        alt={displayName}
+        onError={() => setFailed(true)}
+        className="w-11 h-11 rounded-2xl object-cover flex-shrink-0"
+        style={{ border: '2px solid var(--primary)' }}
+      />
+    );
+  }
+
+  return (
+    <div
+      className="w-11 h-11 rounded-2xl flex items-center justify-center font-bold text-white text-base flex-shrink-0"
+      style={{ background: 'var(--grad-primary)' }}
+    >
+      {initial}
+    </div>
+  );
+}
 
 function StatCard({
   tone, icon, label, value,
