@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('RAHA_ML_VERSION',      '1.0.0');
+define('RAHA_ML_VERSION',      '1.1.0');
 define('RAHA_ML_TAX',          'raha_lang');
 define('RAHA_ML_GROUP_META',   '_raha_group_id');
 define('RAHA_ML_DEFAULT_LANG', 'fa');
@@ -415,7 +415,20 @@ function raha_language_switcher($args = []) {
 }
 
 // ════════════════════════════════════════════════════════════════════════
-//  7) <html lang dir> on the front-end
+//  7) PERMALINKS — auto-prefix /en/ for non-default-language posts
+// ════════════════════════════════════════════════════════════════════════
+add_filter('post_link', 'raha_ml_filter_permalink', 10, 2);
+add_filter('post_type_link', 'raha_ml_filter_permalink', 10, 2);
+function raha_ml_filter_permalink($url, $post) {
+    if (!$post || (is_object($post) && $post->post_type !== 'post')) return $url;
+    $pid = is_object($post) ? $post->ID : (int) $post;
+    $lang = raha_get_post_lang($pid);
+    if (!$lang || $lang === RAHA_ML_DEFAULT_LANG) return $url;
+    return raha_localize_url($url, $lang);
+}
+
+// ════════════════════════════════════════════════════════════════════════
+//  8) <html lang dir> on the front-end
 // ════════════════════════════════════════════════════════════════════════
 add_filter('language_attributes', function ($output) {
     $lang  = raha_get_current_lang();
