@@ -14,6 +14,7 @@ export default function WPEditPost() {
   const [title,   setTitle]   = useState('');
   const [content, setContent] = useState('');
   const [status,  setStatus]  = useState<'publish' | 'draft' | 'pending'>('publish');
+  const [lang,    setLang]    = useState<'fa' | 'en'>('fa');
   const [saved,   setSaved]   = useState(false);
 
   useEffect(() => {
@@ -21,6 +22,7 @@ export default function WPEditPost() {
       setTitle(stripHtml(post.title?.rendered || ''));
       setContent(post.content?.rendered || '');
       setStatus(post.status || 'publish');
+      if (post.raha_lang) setLang(post.raha_lang);
     }
   }, [post]);
 
@@ -29,7 +31,7 @@ export default function WPEditPost() {
     try {
       await updateMut.mutateAsync({
         id: postId,
-        payload: { title, content, status },
+        payload: { title, content, status, raha_lang: lang },
       });
       setSaved(true);
       setTimeout(() => setSaved(false), 2500);
@@ -94,18 +96,48 @@ export default function WPEditPost() {
           />
         </div>
 
-        <div>
-          <label className="text-label text-xs mb-1.5 block">وضعیت</label>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as any)}
-            className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue"
-          >
-            <option value="publish">منتشر شده</option>
-            <option value="draft">پیش‌نویس</option>
-            <option value="pending">در انتظار</option>
-          </select>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="text-label text-xs mb-1.5 block">زبان</label>
+            <select
+              value={lang}
+              onChange={(e) => setLang(e.target.value as any)}
+              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue"
+            >
+              <option value="fa">🇮🇷 فارسی</option>
+              <option value="en">🇬🇧 English</option>
+            </select>
+          </div>
+          <div>
+            <label className="text-label text-xs mb-1.5 block">وضعیت</label>
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as any)}
+              className="w-full bg-surface border border-border rounded-xl px-4 py-3 text-white focus:outline-none focus:border-blue"
+            >
+              <option value="publish">منتشر شده</option>
+              <option value="draft">پیش‌نویس</option>
+              <option value="pending">در انتظار</option>
+            </select>
+          </div>
         </div>
+
+        {post.raha_translations && Object.keys(post.raha_translations).length > 1 && (
+          <div className="bg-surface border border-blue/30 rounded-xl p-3">
+            <p className="text-label text-xs mb-2">🔗 ترجمه‌های پیوندخورده:</p>
+            <div className="flex flex-col gap-1.5">
+              {Object.entries(post.raha_translations).map(([l, t]: [string, any]) => l !== lang && (
+                <button
+                  key={l}
+                  onClick={() => navigate(`/wp-edit/${t.id}`)}
+                  className="text-blue text-xs text-right hover:underline"
+                >
+                  {l === 'fa' ? '🇮🇷' : '🇬🇧'} {t.title || `#${t.id}`} →
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
         {saved && (
           <div className="bg-success/10 border border-success/30 text-success text-sm rounded-xl px-4 py-3 text-center">

@@ -86,6 +86,45 @@ export async function getMedia(params: Record<string, any> = {}) {
   };
 }
 
+// ── Comments ──────────────────────────────────────────────────────────────────
+export async function getComments(params: Record<string, any> = {}) {
+  const res = await axios.get(`${WP_BASE}/comments`, {
+    headers: { Authorization: `Basic ${AUTH}` },
+    params: { per_page: 30, status: 'any', context: 'edit', ...params },
+    timeout: 12000,
+  });
+  return {
+    comments: res.data,
+    total:    parseInt(res.headers['x-wp-total'] || '0'),
+    pages:    parseInt(res.headers['x-wp-totalpages'] || '1'),
+  };
+}
+
+export async function updateComment(id: number, data: Record<string, any>) {
+  const res = await axios.post(`${WP_BASE}/comments/${id}`, data, {
+    headers: { Authorization: `Basic ${AUTH}`, 'Content-Type': 'application/json' },
+    timeout: 10000,
+  });
+  return res.data;
+}
+
+export async function deleteComment(id: number, force = false) {
+  const res = await axios.delete(`${WP_BASE}/comments/${id}`, {
+    headers: { Authorization: `Basic ${AUTH}` },
+    params: { force },
+    timeout: 10000,
+  });
+  return res.data;
+}
+
+export async function createComment(data: Record<string, any>) {
+  const res = await axios.post(`${WP_BASE}/comments`, data, {
+    headers: { Authorization: `Basic ${AUTH}`, 'Content-Type': 'application/json' },
+    timeout: 10000,
+  });
+  return res.data;
+}
+
 // ── RAHA Multilingual plugin endpoints ────────────────────────────────────────
 export async function rahaLinkTranslation(posts: Record<string, number>):
   Promise<{ group_id: string; posts: Record<string, number> }>

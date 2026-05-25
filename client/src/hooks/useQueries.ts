@@ -155,6 +155,42 @@ export function useMedia(page = 1) {
   });
 }
 
+// ── Comments ──────────────────────────────────────────────────────────────────
+export function useComments(status: string = 'any', page = 1) {
+  return useQuery({
+    queryKey: ['comments', status, page],
+    queryFn:  () => api.get('/wp/comments', { params: { status, page } }).then(r => r.data),
+    staleTime: 15_000,
+  });
+}
+
+export function useUpdateComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, payload }: { id: number; payload: object }) =>
+      api.put(`/wp/comments/${id}`, payload).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comments'] }),
+  });
+}
+
+export function useDeleteComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, force = false }: { id: number; force?: boolean }) =>
+      api.delete(`/wp/comments/${id}`, { params: { force } }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comments'] }),
+  });
+}
+
+export function useReplyComment() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, content }: { id: number; content: string }) =>
+      api.post(`/wp/comments/${id}/reply`, { content }).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['comments'] }),
+  });
+}
+
 export function useUploadMedia() {
   const qc = useQueryClient();
   return useMutation({

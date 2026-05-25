@@ -3,6 +3,19 @@ import { query, queryOne, queryInsert } from '../db/pool';
 import { createPost, updatePost, deletePost, rahaLinkTranslation } from '../wp/wpProxy';
 import { dbLog } from '../monitoring/logger';
 
+function extractYouTubeId(url: string): string | null {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/,
+    /^([A-Za-z0-9_-]{11})$/,
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
+
 export async function listContent(req: Request, res: Response) {
   const userId = (req as any).user.userId;
   const role   = (req as any).user.role;
@@ -161,6 +174,27 @@ export async function approveContent(req: Request, res: Response) {
 
     const lang = (row.lang || 'fa') as 'fa' | 'en' | 'both';
 
+    // ── Build embed HTML based on content_type ──────────────────────────
+    let embedHtml = '';
+    if (row.content_type === 'youtube' && row.youtube_url) {
+      const id = extractYouTubeId(row.youtube_url);
+      if (id) {
+        embedHtml = `<div class="raha-embed-youtube" style="position:relative;padding-bottom:56.25%;height:0;margin-bottom:1.5em;border-radius:12px;overflow:hidden;"><iframe src="https://www.youtube.com/embed/${id}" style="position:absolute;top:0;left:0;width:100%;height:100%;border:0;" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowfullscreen></iframe></div>\n`;
+      }
+    } else if (row.content_type === 'podcast' && row.podcast_url) {
+      if (/\.(mp3|m4a|ogg|wav|aac)$/i.test(row.podcast_url)) {
+        embedHtml = `<audio controls style="width:100%;margin-bottom:1.5em;" src="${row.podcast_url}"></audio>\n`;
+      } else if (/spotify\.com/i.test(row.podcast_url)) {
+        // Spotify embed
+        const m = row.podcast_url.match(/spotify\.com\/(episode|show)\/([A-Za-z0-9]+)/);
+        if (m) {
+          embedHtml = `<iframe src="https://open.spotify.com/embed/${m[1]}/${m[2]}" style="width:100%;height:232px;border:0;border-radius:12px;margin-bottom:1.5em;" allow="autoplay; clipboard-write; encrypted-media; fullscreen; picture-in-picture"></iframe>\n`;
+        }
+      } else if (/soundcloud\.com/i.test(row.podcast_url)) {
+        embedHtml = `<iframe src="https://w.soundcloud.com/player/?url=${encodeURIComponent(row.podcast_url)}&color=%231F6562&auto_play=false" style="width:100%;height:166px;border:0;margin-bottom:1.5em;" scrolling="no"></iframe>\n`;
+      }
+    }
+
     let faPost: any = null;
     let enPost: any = null;
 
@@ -169,7 +203,7 @@ export async function approveContent(req: Request, res: Response) {
       faPost = await createPost({
         ...shared,
         title:     row.title_fa,
-        content:   row.content_fa,
+        content:   embedHtml + row.content_fa,
         excerpt:   row.excerpt_fa || undefined,
         raha_lang: 'fa',
       });
@@ -180,7 +214,7 @@ export async function approveContent(req: Request, res: Response) {
       enPost = await createPost({
         ...shared,
         title:     row.title_en,
-        content:   row.content_en,
+        content:   embedHtml + row.content_en,
         excerpt:   row.excerpt_en || undefined,
         raha_lang: 'en',
       });
@@ -197,7 +231,7 @@ export async function approveContent(req: Request, res: Response) {
       const single = await createPost({
         ...shared,
         title:     fallbackTitle,
-        content:   fallbackContent,
+        content:   embedHtml + fallbackContent,
         raha_lang: fallbackLang,
       });
       if (fallbackLang === 'fa') faPost = single; else enPost = single;

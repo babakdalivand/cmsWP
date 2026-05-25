@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import {
   CheckCircle, Clock, FileText, Sparkles, Plus,
-  Image as ImageIcon, FolderTree, Cpu, ChevronLeft,
+  Image as ImageIcon, FolderTree, Cpu, ChevronLeft, MessageSquare,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -149,6 +149,8 @@ export default function Dashboard() {
         onClick={() => navigate('/media')} />
       <ActionRow icon={<FolderTree size={18} />} label="دسته‌بندی‌ها"
         onClick={() => navigate('/categories')} />
+      <ActionRow icon={<MessageSquare size={18} />} label="دیدگاه‌ها"
+        onClick={() => navigate('/comments')} />
       <ActionRow icon={<Cpu size={18} />} label="تنظیمات AI"
         onClick={() => navigate('/settings')} />
 

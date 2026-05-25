@@ -247,21 +247,27 @@ export default function CreateContent() {
             placeholder="عنوان فارسی" dir="rtl"
             className="w-full bg-bg border border-border rounded-lg px-3 py-3 text-text placeholder-label text-sm focus:outline-none focus:border-blue mb-3" />
 
-          {type === 'article' && (
-            <>
-              <RichTextEditor
-                value={form.content_fa}
-                onChange={(html) => set('content_fa', html)}
-                placeholder="محتوای فارسی... — می‌توانید با AI تولید کنید"
-                dir="rtl"
-              />
-              <AIButtons className="mt-3" loading={aiLoading} provider={provider}
-                onContent={() => aiAction('content', 'content_fa', `یک مقاله جامع، روان و خوش‌خوان به زبان فارسی درباره موضوع زیر بنویس. خروجی را به صورت HTML ساده برگردان (با p, h2, h3, ul, ol, blockquote, a, strong, em). موضوع: ${form.title_fa}`)}
-                onImprove={() => aiAction('improve', 'content_fa', `متن فارسی زیر را بهبود بده و روان‌تر کن. ساختار HTML را حفظ کن:\n\n${form.content_fa}`)}
-                onSEO={() => aiAction('seo', 'content_fa', `یک متن SEO-friendly با meta description و کلمات کلیدی برای موضوع: ${form.title_fa}`)}
-              />
-            </>
-          )}
+          <RichTextEditor
+            value={form.content_fa}
+            onChange={(html) => set('content_fa', html)}
+            placeholder={
+              type === 'article' ? 'محتوای فارسی... — می‌توانید با AI تولید کنید'
+              : type === 'youtube' ? 'توضیحات ویدیو فارسی...'
+              : type === 'podcast' ? 'توضیحات پادکست فارسی...'
+              : 'توضیحات فارسی...'
+            }
+            dir="rtl"
+          />
+          <AIButtons className="mt-3" loading={aiLoading} provider={provider}
+            onContent={() => aiAction('content', 'content_fa', `یک ${
+              type === 'youtube' ? 'توضیح کوتاه برای ویدیو'
+              : type === 'podcast' ? 'توضیح کوتاه برای پادکست'
+              : type === 'media' ? 'توضیح برای فایل رسانه'
+              : 'مقاله جامع، روان و خوش‌خوان'
+            } به زبان فارسی درباره موضوع زیر بنویس. خروجی را به صورت HTML ساده برگردان (با p, h2, h3, ul, ol, blockquote, a, strong, em). موضوع: ${form.title_fa}`)}
+            onImprove={() => aiAction('improve', 'content_fa', `متن فارسی زیر را بهبود بده و روان‌تر کن. ساختار HTML را حفظ کن:\n\n${form.content_fa}`)}
+            onSEO={() => aiAction('seo', 'content_fa', `یک متن SEO-friendly با meta description و کلمات کلیدی برای موضوع: ${form.title_fa}`)}
+          />
         </Section>
       )}
 
@@ -272,32 +278,62 @@ export default function CreateContent() {
             placeholder="English Title" dir="ltr"
             className="w-full bg-bg border border-border rounded-lg px-3 py-3 text-text placeholder-label text-sm focus:outline-none focus:border-blue mb-3" />
 
-          {type === 'article' && (
-            <RichTextEditor
-              value={form.content_en}
-              onChange={(html) => set('content_en', html)}
-              placeholder="English content..."
-              dir="ltr"
-            />
-          )}
+          <RichTextEditor
+            value={form.content_en}
+            onChange={(html) => set('content_en', html)}
+            placeholder={
+              type === 'article' ? 'English content...'
+              : type === 'youtube' ? 'English video description...'
+              : type === 'podcast' ? 'English podcast description...'
+              : 'English description...'
+            }
+            dir="ltr"
+          />
         </Section>
       )}
 
       {/* ── 5. YouTube ─────────────────────────────────────────────── */}
       {type === 'youtube' && (
-        <Section title="لینک یوتیوب">
+        <Section title="لینک یوتیوب" hint="ویدیو در پست پیش از توضیحات نمایش داده می‌شود">
           <input value={form.youtube_url} onChange={e => set('youtube_url', e.target.value)}
             placeholder="https://youtube.com/watch?v=..." dir="ltr"
             className="w-full bg-bg border border-border rounded-lg px-3 py-3 text-text placeholder-label text-sm focus:outline-none focus:border-blue" />
+          {(() => {
+            const id = extractYouTubeId(form.youtube_url);
+            if (!id) return null;
+            return (
+              <div className="mt-3 rounded-xl overflow-hidden border border-blue/30 bg-bg">
+                <div className="relative" style={{ paddingBottom: '56.25%' }}>
+                  <iframe
+                    src={`https://www.youtube.com/embed/${id}`}
+                    className="absolute inset-0 w-full h-full"
+                    allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                    allowFullScreen
+                    title="YouTube preview"
+                  />
+                </div>
+                <p className="text-label text-[10px] p-2">✓ ویدیو شناسایی شد: <span className="text-blue" dir="ltr">{id}</span></p>
+              </div>
+            );
+          })()}
         </Section>
       )}
 
       {/* ── 6. Podcast ─────────────────────────────────────────────── */}
       {type === 'podcast' && (
-        <Section title="لینک پادکست">
+        <Section title="لینک پادکست" hint="فایل صوتی در پست قابل پخش خواهد بود">
           <input value={form.podcast_url} onChange={e => set('podcast_url', e.target.value)}
-            placeholder="https://..." dir="ltr"
+            placeholder="https://example.com/podcast.mp3 یا Spotify/SoundCloud URL" dir="ltr"
             className="w-full bg-bg border border-border rounded-lg px-3 py-3 text-text placeholder-label text-sm focus:outline-none focus:border-blue" />
+          {form.podcast_url && /\.(mp3|m4a|ogg|wav|aac)$/i.test(form.podcast_url) && (
+            <div className="mt-3 rounded-xl overflow-hidden border border-blue/30 bg-bg p-3">
+              <audio controls src={form.podcast_url} className="w-full" />
+              <p className="text-label text-[10px] mt-2">✓ فایل صوتی مستقیم — embed خودکار</p>
+            </div>
+          )}
+          {form.podcast_url && /spotify|soundcloud|castbox|googlepodcasts|apple\.com\/podcast/i.test(form.podcast_url) && (
+            <p className="mt-2 text-blue text-[10px]">🎙 لینک پادکست خارجی — در پست به‌صورت embed نمایش داده می‌شود</p>
+          )}
         </Section>
       )}
 
@@ -402,6 +438,19 @@ export default function CreateContent() {
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+function extractYouTubeId(url: string): string | null {
+  if (!url) return null;
+  const patterns = [
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/v\/|youtube\.com\/shorts\/)([A-Za-z0-9_-]{11})/,
+    /^([A-Za-z0-9_-]{11})$/,  // bare ID
+  ];
+  for (const p of patterns) {
+    const m = url.match(p);
+    if (m) return m[1];
+  }
+  return null;
+}
 
 function Section({ title, hint, children }: { title?: string; hint?: string; children: React.ReactNode }) {
   return (

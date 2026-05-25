@@ -7,7 +7,10 @@ import {
   listContent, getContent, createContent, updateContent,
   submitForReview, approveContent, rejectContent, deleteContent,
 } from '../content/contentController';
-import { getPosts, getCategories, uploadMedia, getMedia, updatePost, deletePost, wpRequest } from '../wp/wpProxy';
+import {
+  getPosts, getCategories, uploadMedia, getMedia, updatePost, deletePost, wpRequest,
+  getComments, updateComment, deleteComment, createComment,
+} from '../wp/wpProxy';
 import { handleWebhook } from '../bot/telegramBot';
 import { query } from '../db/pool';
 
@@ -85,6 +88,38 @@ router.put('/wp/categories/:id', authMiddleware, requireAdmin, async (req: Reque
 router.delete('/wp/categories/:id', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
   try { res.json(await wpRequest('DELETE', `/categories/${req.params.id}`, null, { force: true })); }
   catch (e: any) { res.status(500).json({ error: e.response?.data?.message || e.message }); }
+});
+
+// ── Comments ──────────────────────────────────────────────────────────────────
+router.get('/wp/comments', authMiddleware, async (req: Request, res: Response) => {
+  try { res.json(await getComments(req.query as any)); }
+  catch (e: any) { res.status(500).json({ error: e.response?.data?.message || e.message }); }
+});
+
+router.put('/wp/comments/:id', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try { res.json(await updateComment(parseInt(req.params.id), req.body)); }
+  catch (e: any) { res.status(500).json({ error: e.response?.data?.message || e.message }); }
+});
+
+router.delete('/wp/comments/:id', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try { res.json(await deleteComment(parseInt(req.params.id), req.query.force === 'true')); }
+  catch (e: any) { res.status(500).json({ error: e.response?.data?.message || e.message }); }
+});
+
+router.post('/wp/comments/:id/reply', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const parent = parseInt(req.params.id);
+    const parentComment = await wpRequest('GET', `/comments/${parent}`);
+    const reply = await createComment({
+      post:    parentComment.post,
+      parent,
+      content: req.body.content,
+      status:  'approved',
+    });
+    res.json(reply);
+  } catch (e: any) {
+    res.status(500).json({ error: e.response?.data?.message || e.message });
+  }
 });
 
 router.get('/wp/media', authMiddleware, async (req: Request, res: Response) => {
