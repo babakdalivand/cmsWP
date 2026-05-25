@@ -46,20 +46,45 @@ export async function createContent(req: Request, res: Response) {
 
   const status = scheduled_at ? 'scheduled' : 'draft';
 
-  const id = await queryInsert(
-    `INSERT INTO content_staging
-       (user_id, content_type, lang, title_fa, title_en, content_fa, content_en,
-        excerpt_fa, excerpt_en, youtube_url, podcast_url, embed_provider,
-        featured_media, categories, status, scheduled_at)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-    [userId, content_type, lang, title_fa, title_en, content_fa, content_en,
-     excerpt_fa, excerpt_en, youtube_url, podcast_url, embed_provider,
-     featured_media, categories ? JSON.stringify(categories) : null,
-     status, scheduled_at || null]
-  );
+  // mysql2 throws "Bind parameters must not contain undefined" — coerce all
+  // optional fields to null so a missing featured_media / excerpt / etc.
+  // doesn't crash the Node process and return 503.
+  const n = (v: any) => (v === undefined || v === '' ? null : v);
 
-  await dbLog('info', 'content', 'Content created', { userId, id });
-  return res.status(201).json({ id, message: 'محتوا ذخیره شد' });
+  try {
+    const id = await queryInsert(
+      `INSERT INTO content_staging
+         (user_id, content_type, lang, title_fa, title_en, content_fa, content_en,
+          excerpt_fa, excerpt_en, youtube_url, podcast_url, embed_provider,
+          featured_media, categories, status, scheduled_at)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [
+        userId,
+        content_type,
+        lang,
+        n(title_fa),
+        n(title_en),
+        n(content_fa),
+        n(content_en),
+        n(excerpt_fa),
+        n(excerpt_en),
+        n(youtube_url),
+        n(podcast_url),
+        n(embed_provider),
+        n(featured_media),
+        categories ? JSON.stringify(categories) : null,
+        status,
+        n(scheduled_at),
+      ]
+    );
+
+    await dbLog('info', 'content', 'Content created', { userId, id });
+    return res.status(201).json({ id, message: 'محتوا ذخیره شد' });
+  } catch (err: any) {
+    console.error('❌ createContent error:', err.message, err.stack);
+    await dbLog('error', 'content', 'createContent failed', { error: err.message, userId });
+    return res.status(500).json({ error: 'خطا در ذخیره: ' + err.message });
+  }
 }
 
 export async function updateContent(req: Request, res: Response) {
@@ -83,7 +108,8 @@ export async function updateContent(req: Request, res: Response) {
 
   for (const f of fields) {
     if (req.body[f] !== undefined) {
-      params.push(f === 'categories' ? JSON.stringify(req.body[f]) : req.body[f]);
+      const v = req.body[f];
+      params.push(v === '' ? null : v);
       updates.push(`${f}=?`);
     }
   }
