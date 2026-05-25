@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { query, queryOne, queryInsert } from '../db/pool';
-import { createPost, updatePost, deletePost } from '../wp/wpProxy';
+import { createPost, updatePost, deletePost, rahaLinkTranslation } from '../wp/wpProxy';
 import { dbLog } from '../monitoring/logger';
 
 export async function listContent(req: Request, res: Response) {
@@ -127,24 +127,91 @@ export async function approveContent(req: Request, res: Response) {
     const cats = row.categories
       ? (typeof row.categories === 'string' ? JSON.parse(row.categories) : row.categories)
       : [];
-    const wpData: Record<string, any> = {
-      title:   row.title_fa || row.title_en,
-      content: row.content_fa || row.content_en,
-      status:  'publish',
-    };
-    if (cats.length)        wpData.categories     = cats;
-    if (row.featured_media) wpData.featured_media = row.featured_media;
 
-    const wpPost = await createPost(wpData);
+    // Categories and featured media are shared across translations
+    const shared: Record<string, any> = { status: 'publish' };
+    if (cats.length)        shared.categories     = cats;
+    if (row.featured_media) shared.featured_media = row.featured_media;
+
+    const lang = (row.lang || 'fa') as 'fa' | 'en' | 'both';
+
+    let faPost: any = null;
+    let enPost: any = null;
+
+    // Persian version
+    if ((lang === 'fa' || lang === 'both') && row.title_fa && row.content_fa) {
+      faPost = await createPost({
+        ...shared,
+        title:     row.title_fa,
+        content:   row.content_fa,
+        excerpt:   row.excerpt_fa || undefined,
+        raha_lang: 'fa',
+      });
+    }
+
+    // English version
+    if ((lang === 'en' || lang === 'both') && row.title_en && row.content_en) {
+      enPost = await createPost({
+        ...shared,
+        title:     row.title_en,
+        content:   row.content_en,
+        excerpt:   row.excerpt_en || undefined,
+        raha_lang: 'en',
+      });
+    }
+
+    // Fallback: if 'both' was requested but only one side has content, accept what we have
+    if (!faPost && !enPost) {
+      const fallbackTitle   = row.title_fa   || row.title_en;
+      const fallbackContent = row.content_fa || row.content_en;
+      if (!fallbackTitle || !fallbackContent) {
+        return res.status(400).json({ error: 'عنوان و محتوا الزامی است' });
+      }
+      const fallbackLang = row.title_fa ? 'fa' : 'en';
+      const single = await createPost({
+        ...shared,
+        title:     fallbackTitle,
+        content:   fallbackContent,
+        raha_lang: fallbackLang,
+      });
+      if (fallbackLang === 'fa') faPost = single; else enPost = single;
+    }
+
+    // Link translations if both languages got published
+    let groupId: string | null = null;
+    if (faPost && enPost) {
+      try {
+        const link = await rahaLinkTranslation({ fa: faPost.id, en: enPost.id });
+        groupId = link.group_id;
+      } catch (linkErr: any) {
+        await dbLog('warn', 'content', 'Translation link failed (posts still published)', {
+          error: linkErr.message, faId: faPost.id, enId: enPost.id,
+        });
+      }
+    }
+
+    // Primary post for backward-compat reference in content_staging.wp_post_id
+    const primary = faPost || enPost;
 
     await query(
       `UPDATE content_staging SET status='published', wp_post_id=?,
        approved_by=?, approved_at=NOW(), published_at=NOW() WHERE id=?`,
-      [wpPost.id, adminId, id]
+      [primary.id, adminId, id]
     );
 
-    await dbLog('info', 'content', 'Content approved & published', { adminId, contentId: id, wpPostId: wpPost.id });
-    return res.json({ message: 'منتشر شد', wpPostId: wpPost.id, wpLink: wpPost.link });
+    await dbLog('info', 'content', 'Content approved & published', {
+      adminId, contentId: id, lang,
+      faId: faPost?.id, enId: enPost?.id, groupId,
+    });
+
+    return res.json({
+      message:  groupId ? 'منتشر شد (دوزبانه)' : 'منتشر شد',
+      wpPostId: primary.id,
+      wpLink:   primary.link,
+      fa:       faPost ? { id: faPost.id, link: faPost.link } : null,
+      en:       enPost ? { id: enPost.id, link: enPost.link } : null,
+      groupId,
+    });
   } catch (err: any) {
     await dbLog('error', 'content', 'WP publish failed', { error: err.message });
     return res.status(500).json({ error: 'خطا در انتشار وردپرس: ' + err.message });

@@ -2,7 +2,8 @@ import axios, { AxiosRequestConfig } from 'axios';
 import FormData from 'form-data';
 import { config } from '../config';
 
-const WP_BASE = `${config.wp.url}/wp-json/wp/v2`;
+const WP_BASE   = `${config.wp.url}/wp-json/wp/v2`;
+const RAHA_BASE = `${config.wp.url}/wp-json/raha/v1`;
 const AUTH = Buffer.from(`${config.wp.apiUser}:${config.wp.apiPassword}`).toString('base64');
 
 export async function wpRequest<T = any>(
@@ -83,4 +84,20 @@ export async function getMedia(params: Record<string, any> = {}) {
     media: res.data,
     total: parseInt(res.headers['x-wp-total'] || '0'),
   };
+}
+
+// ── RAHA Multilingual plugin endpoints ────────────────────────────────────────
+export async function rahaLinkTranslation(posts: Record<string, number>):
+  Promise<{ group_id: string; posts: Record<string, number> }>
+{
+  const res = await axios.post(`${RAHA_BASE}/link-translation`, { posts }, {
+    headers: { Authorization: `Basic ${AUTH}`, 'Content-Type': 'application/json' },
+    timeout: 10000,
+  });
+  return res.data;
+}
+
+export async function rahaGetTranslations(postId: number): Promise<Record<string, any>> {
+  const res = await axios.get(`${RAHA_BASE}/translations/${postId}`, { timeout: 8000 });
+  return res.data;
 }

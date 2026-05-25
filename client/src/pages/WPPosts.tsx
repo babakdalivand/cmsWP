@@ -11,7 +11,11 @@ interface WPPost {
   status: string;
   date: string;
   link: string;
+  raha_lang?: 'fa' | 'en';
+  raha_translations?: Record<string, { id: number; link: string; title: string }>;
 }
+
+const LANG_FLAG: Record<string, string> = { fa: '🇮🇷', en: '🇬🇧' };
 
 export default function WPPosts() {
   const navigate = useNavigate();
@@ -93,13 +97,23 @@ export default function WPPosts() {
               <div className="flex items-start justify-between gap-2 mb-2">
                 <p className="text-white font-medium text-sm flex-1 leading-relaxed"
                    dangerouslySetInnerHTML={{ __html: post.title.rendered || 'بدون عنوان' }} />
-                <span className={`flex-shrink-0 text-xs px-2 py-0.5 rounded-full border ${
-                  post.status === 'publish'
-                    ? 'text-success border-success/30'
-                    : 'text-label border-border'
-                }`}>
-                  {post.status === 'publish' ? 'منتشر شده' : post.status}
-                </span>
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  {post.raha_lang && (
+                    <span className="text-xs px-2 py-0.5 rounded-full border border-blue/30 text-blue" title={post.raha_lang}>
+                      {LANG_FLAG[post.raha_lang] || post.raha_lang}
+                    </span>
+                  )}
+                  {post.raha_translations && Object.keys(post.raha_translations).length > 1 && (
+                    <span className="text-[10px] text-label" title="ترجمه دارد">↔ {Object.keys(post.raha_translations).length}</span>
+                  )}
+                  <span className={`text-xs px-2 py-0.5 rounded-full border ${
+                    post.status === 'publish'
+                      ? 'text-success border-success/30'
+                      : 'text-label border-border'
+                  }`}>
+                    {post.status === 'publish' ? 'منتشر شده' : post.status}
+                  </span>
+                </div>
               </div>
               <div className="flex items-center justify-between mt-3">
                 <span className="text-label text-xs">
