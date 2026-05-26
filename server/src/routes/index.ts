@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
+import sharp from 'sharp';
 import { authMiddleware, requireAdmin } from '../middleware/auth';
 import { login, getMe, refreshTokens, logout } from '../auth/authController';
 import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey, listOpenRouterModels } from '../ai/aiController';
@@ -130,7 +131,16 @@ router.get('/wp/media', authMiddleware, async (req: Request, res: Response) => {
 router.post('/wp/media', authMiddleware, upload.single('file'), async (req: Request, res: Response) => {
   if (!req.file) return res.status(400).json({ error: 'فایلی انتخاب نشده' });
   try {
-    const result = await uploadMedia(req.file.buffer, req.file.originalname, req.file.mimetype);
+    let { buffer, originalname: filename, mimetype: mimeType } = req.file;
+
+    const convertible = ['image/jpeg', 'image/png', 'image/bmp', 'image/tiff'];
+    if (convertible.includes(mimeType)) {
+      buffer   = await sharp(buffer).webp({ quality: 82 }).toBuffer();
+      filename = filename.replace(/\.[^.]+$/, '.webp');
+      mimeType = 'image/webp';
+    }
+
+    const result = await uploadMedia(buffer, filename, mimeType);
     res.json(result);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 });
