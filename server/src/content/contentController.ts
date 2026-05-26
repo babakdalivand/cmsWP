@@ -168,7 +168,20 @@ export async function approveContent(req: Request, res: Response) {
       : [];
 
     // Categories and featured media are shared across translations
-    const shared: Record<string, any> = { status: 'publish' };
+    // Post format tells WordPress / Blocksy how to render the entry — when
+    // it's 'video' or 'audio' the theme drops the huge featured image on the
+    // single page and shows the embed prominently. Archive cards still use
+    // featured_media for the thumbnail.
+    const FORMAT_MAP: Record<string, string> = {
+      article: 'standard',
+      youtube: 'video',
+      podcast: 'audio',
+      media:   'image',
+    };
+    const shared: Record<string, any> = {
+      status: 'publish',
+      format: FORMAT_MAP[row.content_type] || 'standard',
+    };
     if (cats.length)        shared.categories     = cats;
     if (row.featured_media) shared.featured_media = row.featured_media;
 

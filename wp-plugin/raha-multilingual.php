@@ -15,7 +15,7 @@
 
 if (!defined('ABSPATH')) exit;
 
-define('RAHA_ML_VERSION',      '1.1.0');
+define('RAHA_ML_VERSION',      '1.2.0');
 define('RAHA_ML_TAX',          'raha_lang');
 define('RAHA_ML_GROUP_META',   '_raha_group_id');
 define('RAHA_ML_DEFAULT_LANG', 'fa');
@@ -521,6 +521,51 @@ add_action('admin_notices', function () {
         </script>
     </div>
     <?php
+});
+
+// ════════════════════════════════════════════════════════════════════════
+//  8.5) POST-FORMAT SUPPORT — video/audio/image get distinct layouts
+//       (no duplicated featured image on single video/podcast pages)
+// ════════════════════════════════════════════════════════════════════════
+add_action('after_setup_theme', function () {
+    add_theme_support('post-formats', ['video', 'audio', 'image', 'gallery', 'link', 'quote']);
+}, 11);
+
+// Hide the giant featured-image hero on single video/audio posts.
+// The actual embed inside .entry-content is the real "hero". Archive
+// thumbnails still work because we only target .single body class.
+add_action('wp_head', function () {
+    if (!is_single()) return;
+    $fmt = get_post_format() ?: 'standard';
+    if (!in_array($fmt, ['video', 'audio'], true)) return;
+    echo "<style id=\"raha-hide-thumb-on-{$fmt}\">
+  body.single-format-{$fmt} .post-thumbnail,
+  body.single-format-{$fmt} .featured-image,
+  body.single-format-{$fmt} .entry-thumbnail,
+  body.single-format-{$fmt} .ct-featured-image,
+  body.single-format-{$fmt} .hero-section[data-type=\"type-1\"] .ct-image-container,
+  body.single-format-{$fmt} > article > .wp-post-image,
+  body.single-format-{$fmt} > article > figure.wp-block-post-featured-image,
+  body.single-format-{$fmt} .raha-card-hero img.wp-post-image {
+    display: none !important;
+  }
+  body.single-format-{$fmt} .raha-embed-youtube,
+  body.single-format-{$fmt} .entry-content > iframe:first-child,
+  body.single-format-{$fmt} .entry-content > audio:first-child {
+    margin-top: 0.5em;
+    margin-bottom: 1.5em;
+  }
+</style>";
+}, 99);
+
+// Add raha-fmt-{format} body class so the future custom theme can style
+// on top of post-format conditions easily.
+add_filter('body_class', function ($classes) {
+    if (is_single()) {
+        $fmt = get_post_format() ?: 'standard';
+        $classes[] = 'raha-fmt-' . sanitize_html_class($fmt);
+    }
+    return $classes;
 });
 
 // ════════════════════════════════════════════════════════════════════════
