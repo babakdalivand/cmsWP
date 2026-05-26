@@ -178,9 +178,24 @@ export async function approveContent(req: Request, res: Response) {
       podcast: 'audio',
       media:   'image',
     };
+    const WP_POST_TYPE: Record<string, string> = {
+      youtube: 'pa_video',
+      podcast: 'pa_podcast',
+      media:   'post',
+      article: 'post',
+    };
+    const wpPostType = WP_POST_TYPE[row.content_type] || 'post';
+
+    // Meta fields shared across both language versions
+    const youtubeId = row.content_type === 'youtube' ? extractYouTubeId(row.youtube_url || '') : null;
+    const sharedMeta: Record<string, string> = {};
+    if (youtubeId)       sharedMeta.pa_youtube_id  = youtubeId;
+    if (row.podcast_url) sharedMeta.pa_podcast_url = row.podcast_url;
+
     const shared: Record<string, any> = {
-      status: 'publish',
-      format: FORMAT_MAP[row.content_type] || 'standard',
+      status:    'publish',
+      format:    FORMAT_MAP[row.content_type] || 'standard',
+      post_type: wpPostType,
     };
     if (cats.length)        shared.categories     = cats;
     if (row.featured_media) shared.featured_media = row.featured_media;
@@ -215,10 +230,10 @@ export async function approveContent(req: Request, res: Response) {
     if ((lang === 'fa' || lang === 'both') && row.title_fa && row.content_fa) {
       faPost = await createPost({
         ...shared,
-        title:     row.title_fa,
-        content:   embedHtml + row.content_fa,
-        excerpt:   row.excerpt_fa || undefined,
-        raha_lang: 'fa',
+        title:   row.title_fa,
+        content: embedHtml + row.content_fa,
+        excerpt: row.excerpt_fa || undefined,
+        meta:    { ...sharedMeta, pa_lang: 'fa' },
       });
     }
 
@@ -226,10 +241,10 @@ export async function approveContent(req: Request, res: Response) {
     if ((lang === 'en' || lang === 'both') && row.title_en && row.content_en) {
       enPost = await createPost({
         ...shared,
-        title:     row.title_en,
-        content:   embedHtml + row.content_en,
-        excerpt:   row.excerpt_en || undefined,
-        raha_lang: 'en',
+        title:   row.title_en,
+        content: embedHtml + row.content_en,
+        excerpt: row.excerpt_en || undefined,
+        meta:    { ...sharedMeta, pa_lang: 'en' },
       });
     }
 
@@ -243,9 +258,9 @@ export async function approveContent(req: Request, res: Response) {
       const fallbackLang = row.title_fa ? 'fa' : 'en';
       const single = await createPost({
         ...shared,
-        title:     fallbackTitle,
-        content:   embedHtml + fallbackContent,
-        raha_lang: fallbackLang,
+        title:   fallbackTitle,
+        content: embedHtml + fallbackContent,
+        meta:    { ...sharedMeta, pa_lang: fallbackLang },
       });
       if (fallbackLang === 'fa') faPost = single; else enPost = single;
     }

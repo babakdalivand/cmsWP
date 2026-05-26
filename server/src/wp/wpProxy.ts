@@ -4,6 +4,13 @@ import { config } from '../config';
 
 const WP_BASE   = `${config.wp.url}/wp-json/wp/v2`;
 const RAHA_BASE = `${config.wp.url}/wp-json/raha/v1`;
+
+const CPT_ENDPOINTS: Record<string, string> = {
+  pa_video:   '/pa_video',
+  pa_podcast: '/pa_podcast',
+  pa_short:   '/pa_short',
+  pa_book:    '/pa_book',
+};
 const AUTH = Buffer.from(`${config.wp.apiUser}:${config.wp.apiPassword}`).toString('base64');
 
 export async function wpRequest<T = any>(
@@ -42,7 +49,11 @@ export async function getCategories() {
 }
 
 export async function createPost(data: Record<string, any>) {
-  return wpRequest('POST', '/posts', data);
+  const postType = data.post_type as string | undefined;
+  const endpoint = (postType && CPT_ENDPOINTS[postType]) ? CPT_ENDPOINTS[postType] : '/posts';
+  const payload  = { ...data };
+  delete payload.post_type;
+  return wpRequest('POST', endpoint, payload);
 }
 
 export async function updatePost(id: number, data: Record<string, any>) {
