@@ -1,0 +1,28 @@
+name: Deploy to Hostinger
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: 82.198.229.155
+          port: 65002
+          username: u775839017
+          password: ${{ secrets.SSH_PASSWORD }}
+          command_timeout: 120s
+          script: |
+            export PATH=/opt/alt/alt-nodejs22/root/usr/bin:$PATH
+            cd /home/u775839017/domains/app.persianatheists.com/nodejs
+            git pull origin main
+            cd server
+            npm install --production
+            npm run build
+            touch /home/u775839017/domains/app.persianatheists.com/nodejs/tmp/restart.txt
+            echo "Deploy done at $(date)"
