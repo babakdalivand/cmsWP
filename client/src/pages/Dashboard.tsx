@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   CheckCircle, Clock, FileText, Sparkles, Plus,
   Image as ImageIcon, FolderTree, Cpu, ChevronLeft, MessageSquare,
+  Youtube, Smartphone, BookOpen, Mic,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -129,10 +130,14 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-2 gap-3 mb-5">
-          <StatCard tone="success" icon={<CheckCircle size={18} />} label="منتشر شده" value={stats?.approved} />
-          <StatCard tone="warning" icon={<Clock size={18} />}       label="در انتظار" value={stats?.pending} />
-          <StatCard tone="primary" icon={<FileText size={18} />}    label="کل محتوا"  value={stats?.total} />
-          <StatCard tone="accent"  icon={<Sparkles size={18} />}    label="AI امروز"  value={stats?.aiToday} />
+          <StatCard tone="success" icon={<CheckCircle size={18} />} label="منتشر شده"       value={stats?.approved} />
+          <StatCard tone="warning" icon={<Clock size={18} />}       label="در انتظار صف"  value={stats?.ytQueuePending ?? stats?.pending} />
+          <StatCard tone="primary" icon={<FileText size={18} />}    label="کل محتوا"       value={stats?.total} />
+          <StatCard tone="accent"  icon={<Sparkles size={18} />}    label="AI امروز"       value={stats?.aiToday} />
+          <StatCard tone="danger"  icon={<Youtube size={18} />}     label="ویدیوهای یوتیوب" value={stats?.ytVideos} />
+          <StatCard tone="warning" icon={<Smartphone size={18} />}  label="شورت‌های یوتیوب" value={stats?.ytShorts} />
+          <StatCard tone="primary" icon={<BookOpen size={18} />}    label="کتاب‌ها"         value={stats?.wpBooks} />
+          <StatCard tone="accent"  icon={<Mic size={18} />}         label="پادکست‌ها"        value={stats?.wpPodcasts} />
         </div>
       )}
 
@@ -204,7 +209,7 @@ function UserAvatar({ avatarUrl, displayName }: { avatarUrl?: string | null; dis
 
 function StatCard({
   tone, icon, label, value,
-}: { tone: 'primary' | 'accent' | 'success' | 'warning'; icon: React.ReactNode; label: string; value?: number }) {
+}: { tone: 'primary' | 'accent' | 'success' | 'warning' | 'danger'; icon: React.ReactNode; label: string; value?: number }) {
   return (
     <div className="raha-card raha-card-hover p-4">
       <div className="raha-stat-icon mb-3" data-tone={tone}>

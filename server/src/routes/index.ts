@@ -178,7 +178,7 @@ router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
   const userId  = (req as any).user.userId as number;
   const isAdmin = (req as any).user.role === 'admin';
 
-  const [pending, approved, total, aiUsage] = await Promise.all([
+  const [pending, approved, total, aiUsage, ytStats] = await Promise.all([
     isAdmin
       ? query("SELECT COUNT(*) as c FROM content_staging WHERE status='pending'")
       : query("SELECT COUNT(*) as c FROM content_staging WHERE status='pending' AND user_id=?", [userId]),
@@ -189,13 +189,25 @@ router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
       ? query('SELECT COUNT(*) as c FROM content_staging')
       : query('SELECT COUNT(*) as c FROM content_staging WHERE user_id=?', [userId]),
     query('SELECT COUNT(*) as c FROM ai_usage WHERE user_id=? AND DATE(used_at)=CURDATE()', [userId]),
+    // YouTube + WP post type counts via WordPress API
+    (async () => {
+      try {
+        const r = await wpRequest('GET', '/stats-summary', undefined, undefined, '/pa-yt/v1') as any;
+        return r;
+      } catch { return {}; }
+    })(),
   ]);
 
   res.json({
-    pending:  parseInt(String(pending[0]?.c  || '0')),
-    approved: parseInt(String(approved[0]?.c || '0')),
-    total:    parseInt(String(total[0]?.c    || '0')),
-    aiToday:  parseInt(String(aiUsage[0]?.c  || '0')),
+    pending:       parseInt(String(pending[0]?.c  || '0')),
+    approved:      parseInt(String(approved[0]?.c || '0')),
+    total:         parseInt(String(total[0]?.c    || '0')),
+    aiToday:       parseInt(String(aiUsage[0]?.c  || '0')),
+    ytVideos:      ytStats?.yt_videos      ?? 0,
+    ytShorts:      ytStats?.yt_shorts      ?? 0,
+    ytQueuePending:ytStats?.queue_pending  ?? 0,
+    wpBooks:       ytStats?.wp_books       ?? 0,
+    wpPodcasts:    ytStats?.wp_podcasts    ?? 0,
   });
 });
 

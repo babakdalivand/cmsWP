@@ -40,8 +40,13 @@ export async function deleteChannel(req: Request, res: Response) {
 
 export async function listQueue(req: Request, res: Response) {
   try {
-    const { status = 'pending', limit = 50, offset = 0 } = req.query;
-    const result = await ytApi('GET', `/queue?status=${status}&limit=${limit}&offset=${offset}`);
+    const { status = 'pending', limit = 50, offset = 0, type = '', sort = 'published_at', order = 'DESC' } = req.query;
+    const qs = new URLSearchParams({
+      status: String(status), limit: String(limit), offset: String(offset),
+      sort: String(sort), order: String(order),
+      ...(type ? { type: String(type) } : {}),
+    }).toString();
+    const result = await ytApi('GET', `/queue?${qs}`);
     res.json(result);
   } catch (e: any) { res.status(500).json({ error: e.message }); }
 }

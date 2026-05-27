@@ -64,6 +64,11 @@ add_action('rest_api_init', function() {
     register_rest_route('pa-yt/v1', '/youtube/live-stats', [
         ['methods'=>'GET', 'callback'=>'pays_rest_live_stats', 'permission_callback'=>$admin],
     ]);
+
+    /* Site-wide stats summary for dashboard */
+    register_rest_route('pa-yt/v1', '/stats-summary', [
+        ['methods'=>'GET', 'callback'=>'pays_rest_stats_summary', 'permission_callback'=>$admin],
+    ]);
 });
 
 /* â”€â”€ Channels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -657,6 +662,25 @@ function pays_rest_analytics_snapshot(): WP_REST_Response {
     $a     = new PAYS_Analytics();
     $saved = $a->snapshot_all();
     return new WP_REST_Response( [ 'saved' => $saved ], 200 );
+}
+
+function pays_rest_stats_summary(): WP_REST_Response {
+    global $wpdb;
+    $q = $wpdb->prefix . 'pays_queue';
+
+    $yt_videos   = (int) wp_count_posts('pa_video')->publish;
+    $yt_shorts   = (int) wp_count_posts('pa_short')->publish;
+    $wp_books    = post_type_exists('pa_book')    ? (int) wp_count_posts('pa_book')->publish    : 0;
+    $wp_podcasts = post_type_exists('pa_podcast') ? (int) wp_count_posts('pa_podcast')->publish : 0;
+    $queue_pending = (int) $wpdb->get_var("SELECT COUNT(*) FROM $q WHERE status='pending'");
+
+    return new WP_REST_Response([
+        'yt_videos'     => $yt_videos,
+        'yt_shorts'     => $yt_shorts,
+        'queue_pending' => $queue_pending,
+        'wp_books'      => $wp_books,
+        'wp_podcasts'   => $wp_podcasts,
+    ], 200);
 }
 
 function pays_rest_live_stats( WP_REST_Request $req ): WP_REST_Response {
