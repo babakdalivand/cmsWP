@@ -39,3 +39,14 @@ jobs:
           source: "wp-plugin/pa-youtube-sync/*"
           target: /home/u775839017/domains/persianatheists.com/public_html/wp-content/plugins/pa-youtube-sync
           strip_components: 2
+
+      - name: Deploy WordPress theme files via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: 82.198.229.155
+          port: 65002
+          username: u775839017
+          password: ${{ secrets.SSH_PASSWORD }}
+          source: "wp-theme/*"
+          target: /home/u775839017/domains/persianatheists.com/public_html/wp-content/themes/persian-atheists
+          strip_components: 1
