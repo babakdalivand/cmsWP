@@ -1,0 +1,32 @@
+# Next.js static export — Apache rewrite rules
+Options -MultiViews
+RewriteEngine On
+
+# Serve pre-built HTML files directly
+RewriteCond %{REQUEST_FILENAME} -f [OR]
+RewriteCond %{REQUEST_FILENAME} -d
+RewriteRule ^ - [L]
+
+# Remove .html extension (Next.js trailingSlash generates folder/index.html)
+RewriteCond %{REQUEST_FILENAME}.html -f
+RewriteRule ^(.*)$ $1.html [L]
+
+# SPA fallback for client-side routes — redirect to index
+RewriteRule ^ /watch/index.html [L]
+
+# Security headers
+<IfModule mod_headers.c>
+  Header set X-Content-Type-Options "nosniff"
+  Header set X-Frame-Options "SAMEORIGIN"
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Cache static assets aggressively
+<FilesMatch "\.(js|css|png|jpg|jpeg|webp|svg|ico|woff2?)$">
+  Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+
+# Cache HTML briefly (content changes on each deploy)
+<FilesMatch "\.html$">
+  Header set Cache-Control "public, max-age=300"
+</FilesMatch>

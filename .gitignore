@@ -34,3 +34,8 @@ Thumbs.db
 # Uploads / temp
 uploads/
 tmp/
+
+# Next.js frontend build output (built by GitHub Actions, not committed)
+frontend/.next/
+frontend/out/
+frontend/node_modules/
