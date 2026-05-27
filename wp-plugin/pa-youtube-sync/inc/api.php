@@ -205,12 +205,8 @@ class PAYS_API {
     }
 
     public static function is_short( string $iso, string $title = '', string $description = '' ): bool {
-        $sec      = self::duration_seconds($iso);
-        $haystack = strtolower( $title . ' ' . $description );
-        $has_tag  = str_contains( $haystack, '#shorts' ) || str_contains( $haystack, '#short' );
-        if ( $sec > 180 ) return false;
-        if ( $sec <= 60 ) return true;
-        return $has_tag; // 61–180s: only Short if explicitly tagged
+        $sec = self::duration_seconds($iso);
+        return $sec > 0 && $sec <= 180;
     }
 
     public static function shorts_playlist_id( string $channel_id ): string {
