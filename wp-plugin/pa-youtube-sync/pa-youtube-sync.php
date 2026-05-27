@@ -1,0 +1,77 @@
+<?php
+/**
+ * Plugin Name: PA YouTube Sync
+ * Plugin URI:  https://persianatheists.com
+ * Description: همگام‌سازی ویدیو، شورت، لایو و پلی‌لیست از یوتیوب — با صف انتظار و REST API
+ * Version:     2.0.0
+ * Author:      RAHA Network
+ */
+
+if ( ! defined('ABSPATH') ) exit;
+
+define( 'PAYS_DIR',     plugin_dir_path(__FILE__) );
+define( 'PAYS_URI',     plugin_dir_url(__FILE__)  );
+define( 'PAYS_VERSION', '2.0.0'                   );
+
+require_once PAYS_DIR . 'inc/api.php';
+require_once PAYS_DIR . 'inc/importer.php';
+require_once PAYS_DIR . 'inc/cron.php';
+require_once PAYS_DIR . 'inc/webhook.php';
+require_once PAYS_DIR . 'inc/queue.php';
+require_once PAYS_DIR . 'inc/rest-api.php';
+require_once PAYS_DIR . 'inc/admin.php';
+require_once PAYS_DIR . 'inc/shortcodes.php';
+
+register_activation_hook(   __FILE__, 'pays_activate'   );
+register_deactivation_hook( __FILE__, 'pays_deactivate' );
+
+function pays_activate(): void {
+    pays_create_tables();
+    pays_schedule_cron();
+}
+function pays_deactivate(): void {
+    wp_clear_scheduled_hook('pays_sync_event');
+    wp_clear_scheduled_hook('pays_resub_event');
+}
+
+function pays_create_tables(): void {
+    global $wpdb;
+    $c = $wpdb->get_charset_collate();
+
+    // Import log
+    $log = $wpdb->prefix . 'pays_log';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$log'") !== $log ) {
+        $wpdb->query("CREATE TABLE $log (
+            id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            channel_id VARCHAR(64) NOT NULL,
+            yt_id      VARCHAR(64) NOT NULL,
+            post_id    BIGINT UNSIGNED DEFAULT NULL,
+            type       VARCHAR(16) NOT NULL DEFAULT 'video',
+            action     VARCHAR(16) NOT NULL DEFAULT 'created',
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX (channel_id), INDEX (yt_id)
+        ) $c");
+    }
+
+    // Video queue
+    $q = $wpdb->prefix . 'pays_queue';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$q'") !== $q ) {
+        $wpdb->query("CREATE TABLE $q (
+            id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            yt_id        VARCHAR(64) NOT NULL,
+            channel_id   VARCHAR(64) NOT NULL,
+            type         VARCHAR(16) NOT NULL DEFAULT 'video',
+            title        TEXT NOT NULL,
+            description  LONGTEXT,
+            thumbnail    VARCHAR(500),
+            duration_sec INT DEFAULT 0,
+            published_at DATETIME,
+            status       VARCHAR(16) NOT NULL DEFAULT 'pending',
+            post_id      BIGINT UNSIGNED DEFAULT NULL,
+            queued_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            reviewed_at  DATETIME DEFAULT NULL,
+            UNIQUE KEY yt_id (yt_id),
+            INDEX (status), INDEX (channel_id)
+        ) $c");
+    }
+}
