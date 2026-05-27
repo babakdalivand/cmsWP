@@ -211,6 +211,29 @@ router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
   });
 });
 
+// ── WordPress connection diagnostics (admin only) ─────────────────────────────
+router.get('/debug/wp', authMiddleware, requireAdmin, async (_req: Request, res: Response) => {
+  const { config } = await import('../config');
+  try {
+    const r = await wpRequest('GET', '/settings', undefined, undefined, '/pa-yt/v1') as any;
+    res.json({
+      ok: true,
+      wp_url: config.wp.url,
+      wp_user: config.wp.apiUser,
+      api_key_set: !!r?.api_key,
+      response: r,
+    });
+  } catch (e: any) {
+    res.json({
+      ok: false,
+      wp_url: config.wp.url,
+      wp_user: config.wp.apiUser,
+      error: e?.response?.data || e?.message,
+      status: e?.response?.status,
+    });
+  }
+});
+
 // ── Monitoring ────────────────────────────────────────────────────────────────
 router.get('/monitoring/logs', authMiddleware, requireAdmin, async (req: Request, res: Response) => {
   const limitVal = Math.min(parseInt(req.query.limit as string || '50'), 200);

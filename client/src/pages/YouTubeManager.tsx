@@ -86,14 +86,24 @@ export default function YouTubeManager() {
 ═══════════════════════════════════════════════════════════════ */
 function ChannelsTab() {
   const qc = useQueryClient();
-  const { data: channels = [], isLoading } = useYT('/channels');
+  const { data: channels = [], isLoading, isError, error } = useYT('/channels') as any;
   const [input, setInput] = useState('');
   const [lang, setLang]   = useState('fa');
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [addMsg, setAddMsg] = useState('');
+  const [addMsgType, setAddMsgType] = useState<'ok'|'err'>('ok');
+  const [syncMsg, setSyncMsg] = useState('');
+  const [syncMsgType, setSyncMsgType] = useState<'ok'|'err'>('ok');
+
+  const toastCh = (set: (v:string)=>void, setT: (v:'ok'|'err')=>void, msg: string, type: 'ok'|'err') => {
+    setT(type); set(msg); setTimeout(() => set(''), 6000);
+  };
+  const errMsg = (e: any) => e?.response?.data?.error || e?.response?.data?.message || e?.message || 'خطای ناشناخته';
 
   const add = useMutation({
     mutationFn: () => api.post('/youtube/channels', { channel_input: input, lang }).then(r => r.data),
-    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['yt', '/channels'] }); setInput(''); },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['yt', '/channels'] }); setInput(''); toastCh(setAddMsg, setAddMsgType, '✅ کانال اضافه شد', 'ok'); },
+    onError:    (e: any) => toastCh(setAddMsg, setAddMsgType, '❌ ' + errMsg(e), 'err'),
   });
 
   const remove = useMutation({
@@ -111,7 +121,9 @@ function ChannelsTab() {
     onSuccess:  (d) => {
       const total = Object.values(d.results || {}).reduce((a: any, r: any) => a + (r.queued || 0), 0);
       qc.invalidateQueries({ queryKey: ['yt', '/queue'] });
+      toastCh(setSyncMsg, setSyncMsgType, `✅ همگام‌سازی انجام شد — ${total} ویدیو به صف`, 'ok');
     },
+    onError: (e: any) => toastCh(setSyncMsg, setSyncMsgType, '❌ ' + errMsg(e), 'err'),
   });
 
   return (
@@ -135,13 +147,31 @@ function ChannelsTab() {
         </div>
       </div>
 
+      {addMsg && (
+        <div className="rounded-lg px-3 py-2 text-xs font-medium"
+          style={{ background: addMsgType==='ok'?'#dcfce7':'#fee2e2', color: addMsgType==='ok'?'#16a34a':'#dc2626' }}>
+          {addMsg}
+        </div>
+      )}
+
       <button onClick={() => sync.mutate()} disabled={sync.isPending}
         className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-semibold"
         style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
         <RefreshCw size={16} className={sync.isPending ? 'animate-spin' : ''} />
         {sync.isPending ? 'در حال همگام‌سازی...' : 'همگام‌سازی همه کانال‌ها'}
       </button>
+      {syncMsg && (
+        <div className="rounded-lg px-3 py-2 text-xs font-medium"
+          style={{ background: syncMsgType==='ok'?'#dcfce7':'#fee2e2', color: syncMsgType==='ok'?'#16a34a':'#dc2626' }}>
+          {syncMsg}
+        </div>
+      )}
 
+      {isError && (
+        <div className="rounded-lg px-3 py-2 text-xs font-medium" style={{ background: '#fee2e2', color: '#dc2626' }}>
+          ❌ خطا در بارگذاری کانال‌ها: {(error as any)?.response?.data?.error || (error as any)?.message || 'خطای ناشناخته'}
+        </div>
+      )}
       {isLoading && <p className="text-sm text-center py-4" style={{ color: 'var(--label)' }}>در حال بارگذاری...</p>}
       {channels.map((ch: any) => (
         <div key={ch.id} className="raha-card overflow-hidden">
