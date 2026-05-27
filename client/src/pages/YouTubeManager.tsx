@@ -384,8 +384,10 @@ function QueueTab() {
   const qc = useQueryClient();
   const [status, setStatus] = useState<'pending' | 'approved' | 'rejected'>('pending');
   const [search, setSearch] = useState('');
+  const [sort,   setSort]   = useState<'published_at' | 'yt_views'>('published_at');
+  const [order,  setOrder]  = useState<'DESC' | 'ASC'>('DESC');
 
-  const { data, isLoading } = useYT('/queue', { status, limit: 50 });
+  const { data, isLoading } = useYT('/queue', { status, limit: 50, sort, order });
   const items: any[] = data?.items || [];
   const total: number = data?.total || 0;
 
@@ -438,6 +440,30 @@ function QueueTab() {
           className="w-full rounded-xl pr-9 pl-3 py-2.5 text-sm"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         />
+      </div>
+
+      {/* Sort bar */}
+      <div className="flex items-center gap-2" dir="rtl">
+        <span className="text-xs shrink-0" style={{ color: 'var(--label)' }}>مرتب‌سازی:</span>
+        <div className="flex gap-1 flex-1">
+          {([
+            { key: 'published_at', label: 'تاریخ انتشار' },
+            { key: 'yt_views',     label: 'بازدید' },
+          ] as const).map(opt => (
+            <button key={opt.key} onClick={() => {
+              if (sort === opt.key) setOrder(o => o === 'DESC' ? 'ASC' : 'DESC');
+              else { setSort(opt.key); setOrder('DESC'); }
+            }}
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium transition-all"
+              style={{
+                background: sort === opt.key ? 'var(--primary)' : 'var(--surface)',
+                color:      sort === opt.key ? '#fff' : 'var(--label)',
+              }}>
+              {opt.label}
+              {sort === opt.key && <span className="text-[10px]">{order === 'DESC' ? '↓' : '↑'}</span>}
+            </button>
+          ))}
+        </div>
       </div>
 
       {isLoading && <p className="text-center text-sm py-6" style={{ color: 'var(--label)' }}>بارگذاری...</p>}
@@ -496,8 +522,10 @@ function QueueTab() {
 function ShortsTab() {
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
-  const { data: pendingData, isLoading: pendingLoading } = useYT('/queue', { status: 'pending', type: 'short', limit: 50 });
-  const { data: approvedData, isLoading: approvedLoading } = useYT('/queue', { status: 'approved', type: 'short', limit: 30 });
+  const [sort,   setSort]   = useState<'published_at' | 'yt_views'>('published_at');
+  const [order,  setOrder]  = useState<'DESC' | 'ASC'>('DESC');
+  const { data: pendingData, isLoading: pendingLoading } = useYT('/queue', { status: 'pending', type: 'short', limit: 50, sort, order });
+  const { data: approvedData, isLoading: approvedLoading } = useYT('/queue', { status: 'approved', type: 'short', limit: 30, sort, order });
 
   const pending: any[]  = (pendingData?.items || []).filter((i: any) => i.type === 'short');
   const approved: any[] = (approvedData?.items || []).filter((i: any) => i.type === 'short');
@@ -529,6 +557,30 @@ function ShortsTab() {
           className="w-full rounded-xl pr-9 pl-3 py-2.5 text-sm"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         />
+      </div>
+
+      {/* Sort bar */}
+      <div className="flex items-center gap-2" dir="rtl">
+        <span className="text-xs shrink-0" style={{ color: 'var(--label)' }}>مرتب‌سازی:</span>
+        <div className="flex gap-1 flex-1">
+          {([
+            { key: 'published_at', label: 'تاریخ انتشار' },
+            { key: 'yt_views',     label: 'بازدید' },
+          ] as const).map(opt => (
+            <button key={opt.key} onClick={() => {
+              if (sort === opt.key) setOrder(o => o === 'DESC' ? 'ASC' : 'DESC');
+              else { setSort(opt.key); setOrder('DESC'); }
+            }}
+              className="flex-1 flex items-center justify-center gap-1 py-1.5 rounded-lg text-xs font-medium transition-all"
+              style={{
+                background: sort === opt.key ? 'var(--primary)' : 'var(--surface)',
+                color:      sort === opt.key ? '#fff' : 'var(--label)',
+              }}>
+              {opt.label}
+              {sort === opt.key && <span className="text-[10px]">{order === 'DESC' ? '↓' : '↑'}</span>}
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Stats row */}

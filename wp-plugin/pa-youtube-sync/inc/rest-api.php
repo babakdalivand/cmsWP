@@ -131,13 +131,22 @@ function pays_rest_list_queue( WP_REST_Request $req ): WP_REST_Response {
     $status = sanitize_key($req->get_param('status') ?: 'pending');
     $limit  = min((int)($req->get_param('limit') ?: 50), 100);
     $offset = (int)($req->get_param('offset') ?: 0);
+    $type   = sanitize_key($req->get_param('type') ?: '');
+
+    $allowed_sort = ['published_at', 'yt_views', 'queued_at', 'duration_sec'];
+    $sort  = in_array($req->get_param('sort'), $allowed_sort, true) ? $req->get_param('sort') : 'published_at';
+    $order = strtoupper($req->get_param('order') ?: 'DESC') === 'ASC' ? 'ASC' : 'DESC';
+
+    $where = $type
+        ? $wpdb->prepare("WHERE status=%s AND type=%s", $status, $type)
+        : $wpdb->prepare("WHERE status=%s", $status);
 
     $rows = $wpdb->get_results($wpdb->prepare(
-        "SELECT * FROM $q WHERE status=%s ORDER BY published_at DESC LIMIT %d OFFSET %d",
-        $status, $limit, $offset
+        "SELECT * FROM $q $where ORDER BY $sort $order LIMIT %d OFFSET %d",
+        $limit, $offset
     ), ARRAY_A);
 
-    $total = (int)$wpdb->get_var($wpdb->prepare("SELECT COUNT(*) FROM $q WHERE status=%s", $status));
+    $total = (int)$wpdb->get_var("SELECT COUNT(*) FROM $q $where");
     return new WP_REST_Response(['items'=>$rows,'total'=>$total], 200);
 }
 
@@ -649,15 +658,32 @@ function pays_rest_reclassify_queue(): WP_REST_Response {
     global $wpdb;
     $q = $wpdb->prefix . 'pays_queue';
 
-    $rows = $wpdb->get_results( "SELECT id, duration_sec, title, description FROM $q WHERE status='pending'", ARRAY_A );
-    $updated = 0;
+    $rows = $wpdb->get_results( "SELECT id, yt_id, duration_sec, title, description FROM $q WHERE status='pending'", ARRAY_A );
+    if ( empty($rows) ) return new WP_REST_Response( ['total'=>0,'shorts'=>0,'videos'=>0], 200 );
 
+    // Fetch fresh view counts from YouTube API in batches of 50
+    $api_key = get_option('pays_api_key', '');
+    $views_map = [];
+    if ( $api_key ) {
+        $api    = new PAYS_API($api_key);
+        $chunks = array_chunk( array_column($rows, 'yt_id'), 50 );
+        foreach ( $chunks as $chunk ) {
+            $details = $api->video_details($chunk);
+            foreach ( $details as $yt_id => $v ) {
+                $views_map[$yt_id] = (int)($v['statistics']['viewCount'] ?? 0);
+            }
+        }
+    }
+
+    $updated = 0;
     foreach ( $rows as $row ) {
         $iso      = 'PT' . (int)$row['duration_sec'] . 'S';
         $is_short = PAYS_API::is_short( $iso, $row['title'], $row['description'] );
         $new_type = $is_short ? 'short' : 'video';
+        $data     = ['type' => $new_type];
+        if ( isset($views_map[$row['yt_id']]) ) $data['yt_views'] = $views_map[$row['yt_id']];
 
-        $wpdb->update( $q, ['type' => $new_type], ['id' => $row['id']] );
+        $wpdb->update( $q, $data, ['id' => $row['id']] );
         if ( $is_short ) $updated++;
     }
 

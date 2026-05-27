@@ -9,7 +9,7 @@ class PAYS_Importer {
 
     /* ── Add a video to the queue (called from webhook or cron) ─────── */
 
-    public static function enqueue( string $yt_id, string $channel_id, array $snippet, string $duration_iso = 'PT0S' ): bool {
+    public static function enqueue( string $yt_id, string $channel_id, array $snippet, string $duration_iso = 'PT0S', int $yt_views = 0 ): bool {
         global $wpdb;
         $q = $wpdb->prefix . 'pays_queue';
 
@@ -31,6 +31,7 @@ class PAYS_Importer {
             'description'  => wp_strip_all_tags($snippet['description'] ?? ''),
             'thumbnail'    => $snippet['thumbnails']['high']['url'] ?? $snippet['thumbnails']['medium']['url'] ?? '',
             'duration_sec' => $sec,
+            'yt_views'     => $yt_views,
             'published_at' => $pub ? date('Y-m-d H:i:s', strtotime($pub)) : null,
             'status'       => 'pending',
         ]);
@@ -117,7 +118,8 @@ class PAYS_Importer {
             $live_content = $video['snippet']['liveBroadcastContent'] ?? 'none';
             if (in_array($live_content, ['live','upcoming'], true)) { $stats['skipped']++; continue; }
 
-            $queued = self::enqueue($yt_id, $ch['id'], $video['snippet'], $iso);
+            $views  = (int)($video['statistics']['viewCount'] ?? 0);
+            $queued = self::enqueue($yt_id, $ch['id'], $video['snippet'], $iso, $views);
             $queued ? $stats['queued']++ : $stats['skipped']++;
         }
         return $stats;

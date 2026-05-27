@@ -160,6 +160,11 @@ function pays_create_tables(): void {
         if ( empty( $cols ) ) {
             $wpdb->query("ALTER TABLE $q ADD COLUMN notes TEXT DEFAULT NULL AFTER post_id");
         }
+        // Add yt_views column if missing
+        $cols = $wpdb->get_results("SHOW COLUMNS FROM $q LIKE 'yt_views'");
+        if ( empty( $cols ) ) {
+            $wpdb->query("ALTER TABLE $q ADD COLUMN yt_views BIGINT UNSIGNED NOT NULL DEFAULT 0 AFTER duration_sec");
+        }
     }
 
     // Moderation rules
