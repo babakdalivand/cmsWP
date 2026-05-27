@@ -61,4 +61,33 @@ export const api = {
     fetch(apiBase.replace('pa-yt/v1', 'wp/v2') + '/pa_video?per_page=50&_fields=id,title,meta', {
       headers: { 'X-WP-Nonce': nonce },
     }).then((r) => r.json()),
+
+  // Article queue
+  getArticleQueue: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch('/article-queue' + (q ? '?' + q : ''));
+  },
+  getArticleQueueCounts: () => apiFetch('/article-queue/counts'),
+  queueArticle: (postId, ytId, lang, tone) =>
+    apiFetch('/article-queue', {
+      method: 'POST',
+      body: JSON.stringify({ post_id: postId, yt_id: ytId, lang, tone }),
+    }),
+  retryArticle: (id) =>
+    apiFetch(`/article-queue/${id}/retry`, { method: 'POST' }),
+  deleteArticleJob: (id) =>
+    apiFetch(`/article-queue/${id}`, { method: 'DELETE' }),
+
+  // Article actions
+  rewriteArticle: (postId, tone) =>
+    apiFetch(`/article/${postId}/rewrite`, {
+      method: 'POST',
+      body: JSON.stringify({ tone }),
+    }),
+  getLinkSuggestions: (postId) => apiFetch(`/article/${postId}/links`),
+  publishArticle: (postId) =>
+    apiFetch(`/article/${postId}/publish`, { method: 'POST' }),
+
+  // Series taxonomy
+  getSeries: () => apiFetch('/series'),
 };

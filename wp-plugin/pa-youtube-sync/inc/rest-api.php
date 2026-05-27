@@ -345,3 +345,122 @@ function pays_rest_apply_ai( WP_REST_Request $req ): WP_REST_Response {
     PAYS_AI_SEO::apply_to_post( $post_id, $ai );
     return new WP_REST_Response( [ 'applied' => true, 'post_id' => $post_id ], 200 );
 }
+
+/* ── Video-to-Article ────────────────────────────────────────────────── */
+
+add_action( 'rest_api_init', function () {
+    $admin = fn() => current_user_can('manage_options');
+
+    // Article queue
+    register_rest_route('pa-yt/v1', '/article-queue', [
+        [ 'methods' => 'GET',  'callback' => 'pays_rest_list_article_queue', 'permission_callback' => $admin ],
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_add_article_queue',  'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/article-queue/counts', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_article_queue_counts', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/article-queue/(?P<id>\d+)/retry', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_retry_article', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/article-queue/(?P<id>\d+)', [
+        [ 'methods' => 'DELETE', 'callback' => 'pays_rest_delete_article_job', 'permission_callback' => $admin ],
+    ]);
+
+    // Article actions
+    register_rest_route('pa-yt/v1', '/article/(?P<post_id>\d+)/rewrite', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_rewrite_article', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/article/(?P<post_id>\d+)/links', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_get_link_suggestions', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/article/(?P<post_id>\d+)/publish', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_publish_article', 'permission_callback' => $admin ],
+    ]);
+
+    // Taxonomy
+    register_rest_route('pa-yt/v1', '/series', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_list_series', 'permission_callback' => $admin ],
+    ]);
+});
+
+function pays_rest_list_article_queue( WP_REST_Request $req ): WP_REST_Response {
+    $status = sanitize_key( $req->get_param('status') ?: '' );
+    $limit  = min( (int) ( $req->get_param('limit') ?: 30 ), 100 );
+    return new WP_REST_Response( PAYS_Article_Queue::list( $status, $limit ), 200 );
+}
+
+function pays_rest_add_article_queue( WP_REST_Request $req ): WP_REST_Response {
+    $post_id = (int) $req->get_param('post_id');
+    $yt_id   = sanitize_text_field( $req->get_param('yt_id') ?: get_post_meta( $post_id, 'pa_youtube_id', true ) );
+    $lang    = sanitize_key( $req->get_param('lang') ?: get_option('pays_ai_lang', 'en') );
+    $tone    = sanitize_key( $req->get_param('tone') ?: 'formal' );
+
+    if ( ! $post_id || ! $yt_id ) {
+        return new WP_REST_Response( [ 'error' => 'post_id and yt_id required' ], 400 );
+    }
+
+    $id = PAYS_Article_Queue::add( $post_id, $yt_id, $lang, $tone );
+    return new WP_REST_Response( [ 'queue_id' => $id, 'status' => 'pending' ], 201 );
+}
+
+function pays_rest_article_queue_counts(): WP_REST_Response {
+    return new WP_REST_Response( PAYS_Article_Queue::counts(), 200 );
+}
+
+function pays_rest_retry_article( WP_REST_Request $req ): WP_REST_Response {
+    $ok = PAYS_Article_Queue::retry( (int) $req->get_param('id') );
+    return $ok
+        ? new WP_REST_Response( [ 'retried' => true ], 200 )
+        : new WP_REST_Response( [ 'error' => 'Not found' ], 404 );
+}
+
+function pays_rest_delete_article_job( WP_REST_Request $req ): WP_REST_Response {
+    PAYS_Article_Queue::delete( (int) $req->get_param('id') );
+    return new WP_REST_Response( null, 204 );
+}
+
+function pays_rest_rewrite_article( WP_REST_Request $req ): WP_REST_Response {
+    $post_id = (int) $req->get_param('post_id');
+    $tone    = sanitize_key( $req->get_param('tone') ?: 'formal' );
+    $result  = PAYS_Article_Generator::rewrite( $post_id, $tone );
+    return is_wp_error( $result )
+        ? new WP_REST_Response( [ 'error' => $result->get_error_message() ], 500 )
+        : new WP_REST_Response( $result, 200 );
+}
+
+function pays_rest_get_link_suggestions( WP_REST_Request $req ): WP_REST_Response {
+    $post_id = (int) $req->get_param('post_id');
+    $saved   = get_post_meta( $post_id, '_pays_link_suggestions', true );
+    if ( $saved ) return new WP_REST_Response( $saved, 200 );
+
+    $post = get_post( $post_id );
+    $text = $post ? strip_tags( $post->post_content ) : '';
+    return new WP_REST_Response( PAYS_Internal_Links::suggest( $text ), 200 );
+}
+
+function pays_rest_publish_article( WP_REST_Request $req ): WP_REST_Response {
+    $post_id = (int) $req->get_param('post_id');
+    $result  = wp_update_post( [ 'ID' => $post_id, 'post_status' => 'publish' ] );
+    return is_wp_error( $result )
+        ? new WP_REST_Response( [ 'error' => $result->get_error_message() ], 500 )
+        : new WP_REST_Response( [ 'published' => true, 'url' => get_permalink( $post_id ) ], 200 );
+}
+
+function pays_rest_list_series(): WP_REST_Response {
+    $terms = get_terms([
+        'taxonomy'   => 'pa_series',
+        'hide_empty' => false,
+        'number'     => 100,
+    ]);
+    if ( is_wp_error( $terms ) ) return new WP_REST_Response( [], 200 );
+
+    $out = array_map( fn( $t ) => [
+        'id'          => $t->term_id,
+        'name'        => $t->name,
+        'slug'        => $t->slug,
+        'count'       => $t->count,
+        'playlist_id' => get_term_meta( $t->term_id, 'pa_playlist_id', true ),
+    ], $terms );
+
+    return new WP_REST_Response( $out, 200 );
+}

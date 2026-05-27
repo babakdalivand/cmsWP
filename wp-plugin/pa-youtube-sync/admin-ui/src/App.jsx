@@ -4,12 +4,14 @@ import SettingsTab  from './components/SettingsTab';
 import TranscriptTab from './components/TranscriptTab';
 import GenerateTab  from './components/GenerateTab';
 import SchemaTab    from './components/SchemaTab';
+import ArticleTab   from './components/ArticleTab';
 
 const TABS = [
-  { name: 'generate',   title: '✨ Generate',   className: 'tab-generate' },
-  { name: 'transcript', title: '📝 Transcripts', className: 'tab-transcript' },
-  { name: 'schema',     title: '📐 Schema',      className: 'tab-schema' },
-  { name: 'settings',   title: '⚙️ Settings',    className: 'tab-settings' },
+  { name: 'article',    title: '📰 Article',     className: 'tab-article' },
+  { name: 'generate',   title: '✨ SEO',          className: 'tab-generate' },
+  { name: 'transcript', title: '📝 Transcripts',  className: 'tab-transcript' },
+  { name: 'schema',     title: '📐 Schema',       className: 'tab-schema' },
+  { name: 'settings',   title: '⚙️ Settings',     className: 'tab-settings' },
 ];
 
 export default function App() {
@@ -36,6 +38,7 @@ export default function App() {
       <TabPanel tabs={TABS} initialTabName="generate">
         {(tab) => (
           <div style={{ padding: '16px 0' }}>
+            {tab.name === 'article'    && <ArticleTab />}
             {tab.name === 'generate'   && <GenerateTab />}
             {tab.name === 'transcript' && <TranscriptTab />}
             {tab.name === 'schema'     && <SchemaTab />}

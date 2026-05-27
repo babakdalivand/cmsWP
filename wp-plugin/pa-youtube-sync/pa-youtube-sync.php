@@ -18,8 +18,15 @@ require_once PAYS_DIR . 'inc/importer.php';
 require_once PAYS_DIR . 'inc/cron.php';
 require_once PAYS_DIR . 'inc/webhook.php';
 require_once PAYS_DIR . 'inc/transcript.php';
+require_once PAYS_DIR . 'inc/ai-client.php';
 require_once PAYS_DIR . 'inc/ai-seo.php';
 require_once PAYS_DIR . 'inc/schema.php';
+require_once PAYS_DIR . 'inc/gutenberg.php';
+require_once PAYS_DIR . 'inc/internal-links.php';
+require_once PAYS_DIR . 'inc/featured-image.php';
+require_once PAYS_DIR . 'inc/article-generator.php';
+require_once PAYS_DIR . 'inc/article-queue.php';
+require_once PAYS_DIR . 'inc/taxonomy.php';
 require_once PAYS_DIR . 'inc/rest-api.php';
 require_once PAYS_DIR . 'inc/admin.php';
 require_once PAYS_DIR . 'inc/ai-admin.php';
@@ -95,6 +102,24 @@ function pays_create_tables(): void {
             generated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             UNIQUE KEY post_lang (post_id, language),
             INDEX (yt_id)
+        ) $c");
+    }
+
+    // Article generation queue
+    $aq = $wpdb->prefix . 'pays_article_queue';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$aq'") !== $aq ) {
+        $wpdb->query("CREATE TABLE $aq (
+            id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            post_id      BIGINT UNSIGNED NOT NULL,
+            yt_id        VARCHAR(64) NOT NULL,
+            lang         VARCHAR(10) NOT NULL DEFAULT 'en',
+            tone         VARCHAR(20) NOT NULL DEFAULT 'formal',
+            status       VARCHAR(20) NOT NULL DEFAULT 'pending',
+            retries      TINYINT UNSIGNED NOT NULL DEFAULT 0,
+            error_msg    TEXT,
+            created_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            processed_at DATETIME DEFAULT NULL,
+            INDEX (status), INDEX (post_id)
         ) $c");
     }
 
