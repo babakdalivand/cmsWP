@@ -11,53 +11,34 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Node setup ────────────────────────────────────────────────────
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-
-      # ── 1. Build WP plugin admin UI ───────────────────────────────────
-      - name: Build WP plugin admin UI
-        working-directory: wp-plugin/pa-youtube-sync/admin-ui
-        run: npm install && npm run build
-
-      # ── 2. Build Netflix frontend (static export → out/) ──────────────
-      - name: Build Netflix frontend
-        working-directory: frontend
-        run: npm install && npm run build
-
-      # ── 3. Deploy mini-app server + build Telegram client on server ───
-      - name: Deploy mini-app (server + Telegram client)
+      # ── 1. Deploy mini-app (server + client build on host) ────────────
+      - name: Deploy mini-app
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 82.198.229.155
           port: 65002
           username: u775839017
           password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 300s
+          command_timeout: 600s
           script: |
             export PATH=/opt/alt/alt-nodejs22/root/usr/bin:$PATH
             BASE=/home/u775839017/domains/app.persianatheists.com/nodejs
 
-            # Pull latest code
             cd $BASE
             git pull origin main
 
-            # Build Express server
             cd $BASE/server
-            npm install --production
+            npm install --production=false
             npm run build
 
-            # Build Telegram mini-app (client)
             cd $BASE/client
             npm install
             npm run build
 
-            # Restart Node.js app
             touch $BASE/tmp/restart.txt
             echo "Deployed at $(date)"
 
-      # ── 4. Deploy WP plugin via SCP ───────────────────────────────────
+      # ── 2. Deploy WP plugin via SCP ───────────────────────────────────
       - name: Deploy WP plugin
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -69,7 +50,7 @@ jobs:
           target: /home/u775839017/domains/persianatheists.com/public_html/wp-content/plugins/pa-youtube-sync
           strip_components: 2
 
-      # ── 5. Deploy WP theme via SCP ────────────────────────────────────
+      # ── 3. Deploy WP theme via SCP ────────────────────────────────────
       - name: Deploy WP theme
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -80,16 +61,3 @@ jobs:
           source: "wp-theme/*"
           target: /home/u775839017/domains/persianatheists.com/public_html/wp-content/themes/persian-atheists
           strip_components: 1
-
-      # ── 6. Deploy Netflix frontend static files via SCP ───────────────
-      - name: Deploy Netflix frontend
-        uses: appleboy/scp-action@v0.1.7
-        with:
-          host: 82.198.229.155
-          port: 65002
-          username: u775839017
-          password: ${{ secrets.SSH_PASSWORD }}
-          source: "frontend/out/*"
-          target: /home/u775839017/domains/persianatheists.com/public_html/watch
-          strip_components: 2
-          rm: true
