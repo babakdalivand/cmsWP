@@ -10,7 +10,10 @@ if ( ! defined('ABSPATH') ) exit;
    ============================================ */
 add_action('admin_head', function() { ?>
 <style id="pa-admin-ltr-fix">
-/* LTR admin: sidebar on LEFT — only on desktop */
+/* Force LTR on entire admin — theme RTL must not bleed in */
+html, body { direction: ltr !important; }
+
+/* Desktop: sidebar on LEFT */
 @media (min-width: 783px) {
     #adminmenuwrap,
     #adminmenuback {
@@ -27,16 +30,11 @@ add_action('admin_head', function() { ?>
         margin-right: 0    !important;
     }
 }
-/* Mobile: reset all forced margins */
+/* Mobile: full-width content, sidebar as WP overlay */
 @media (max-width: 782px) {
     #wpcontent, #wpfooter {
         margin-left:  0 !important;
         margin-right: 0 !important;
-    }
-    #adminmenuwrap,
-    #adminmenuback {
-        left:  auto !important;
-        right: auto !important;
     }
 }
 </style>
