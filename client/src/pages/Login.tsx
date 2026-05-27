@@ -12,10 +12,15 @@ export default function Login() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  // Try Telegram WebApp auto-login on mount
+  // Try Telegram WebApp auto-login on mount (skip if user manually logged out)
   useEffect(() => {
     const tg = (window as any).Telegram?.WebApp;
     if (!tg?.initData) return;
+
+    if (sessionStorage.getItem('manual_logout')) {
+      sessionStorage.removeItem('manual_logout');
+      return;
+    }
 
     setLoading(true);
     api.post('/auth/telegram', { initData: tg.initData })

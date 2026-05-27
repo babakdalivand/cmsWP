@@ -56,7 +56,8 @@ export default function Dashboard() {
       </div>
 
       {/* ── User pill ─────────────────────────────────────────────── */}
-      <div className="raha-card mb-5 flex items-center gap-3 p-3">
+      <div className="raha-card mb-5 flex items-center gap-3 p-3 cursor-pointer raha-card-hover"
+        onClick={() => navigate('/profile')} role="button" aria-label="پروفایل">
         <UserAvatar avatarUrl={user?.avatarUrl} displayName={user?.displayName || user?.username || ''} />
         <div className="flex-1 min-w-0">
           <p className="text-label text-[10px]">خوش آمدید</p>

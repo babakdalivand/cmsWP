@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Youtube, Plus, Trash2, RefreshCw, Check, X, List,
-  BarChart3, Settings, ChevronDown, ChevronUp, Play,
+  BarChart3, Settings, ChevronDown, ChevronUp, ChevronLeft, Play,
   Search, Zap, Users, Bell, Smartphone, TrendingUp, TrendingDown,
   Clock, Award, Target, FileText, Minus,
 } from 'lucide-react';
@@ -1297,21 +1297,12 @@ function AnalyticsTab() {
 function SettingsTab() {
   const qc = useQueryClient();
   const navigate = useNavigate();
-  const { user, logout: storeLogout } = useAuthStore();
+  const { user } = useAuthStore();
   const { data: cfg, refetch: refetchCfg } = useYT('/settings');
   const [apiKey, setApiKey] = useState('');
   const [interval, setInterval] = useState('hourly');
   const [activeSection, setActiveSection] = useState<'sync' | 'notifications' | 'users'>('sync');
-  const [logoutMsg, setLogoutMsg] = useState('');
   const [fixRoleMsg, setFixRoleMsg] = useState('');
-
-  const doLogout = async () => {
-    try {
-      await api.post('/auth/logout', { refreshToken: useAuthStore.getState().refreshToken });
-    } catch { /* ignore */ }
-    storeLogout();
-    navigate('/login', { replace: true });
-  };
 
   const fixRole = useMutation({
     mutationFn: () => api.post('/auth/fix-role').then(r => r.data),
@@ -1387,38 +1378,29 @@ function SettingsTab() {
   return (
     <div className="space-y-4">
 
-      {/* Profile card */}
-      <div className="raha-card p-4">
+      {/* Profile card → navigates to /profile */}
+      <button
+        onClick={() => navigate('/profile')}
+        className="raha-card raha-card-hover p-4 w-full text-right"
+      >
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold flex-shrink-0"
             style={{ background: 'var(--primary)' }}>
             {user?.displayName?.[0] || user?.username?.[0] || '?'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-semibold truncate">{user?.displayName || user?.username}</p>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-xs px-2 py-0.5 rounded-full font-medium"
-                style={{
-                  background: user?.role === 'admin' ? '#22c55e20' : '#f59e0b20',
-                  color:      user?.role === 'admin' ? '#22c55e'   : '#d97706',
-                }}>
-                {user?.role === 'admin' ? '👑 ادمین' : '✏️ ویراستار'}
-              </span>
-              {user?.role !== 'admin' && (
-                <button onClick={() => fixRole.mutate()} disabled={fixRole.isPending}
-                  className="text-xs px-2 py-0.5 rounded-full"
-                  style={{ background: '#3b82f620', color: '#3b82f6' }}>
-                  {fixRole.isPending ? '...' : '🔧 اصلاح نقش'}
-                </button>
-              )}
-            </div>
+            <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>
+              {user?.displayName || user?.username}
+            </p>
+            <span className="text-xs px-2 py-0.5 rounded-full font-medium mt-0.5 inline-block"
+              style={{
+                background: user?.role === 'admin' ? '#22c55e20' : '#f59e0b20',
+                color:      user?.role === 'admin' ? '#22c55e'   : '#d97706',
+              }}>
+              {user?.role === 'admin' ? '👑 ادمین' : '✏️ ویراستار'}
+            </span>
           </div>
-          <button onClick={doLogout}
-            className="flex items-center gap-1 px-3 py-2 rounded-xl text-xs font-semibold flex-shrink-0"
-            style={{ background: '#fee2e2', color: '#dc2626' }}>
-            <X size={14} />
-            خروج
-          </button>
+          <ChevronLeft size={16} style={{ color: 'var(--label)' }} />
         </div>
         {fixRoleMsg && (
           <div className="mt-2 rounded-lg px-3 py-2 text-xs"
@@ -1427,7 +1409,7 @@ function SettingsTab() {
             {fixRoleMsg}
           </div>
         )}
-      </div>
+      </button>
 
       {/* Section tabs */}
       <div className="flex gap-2">

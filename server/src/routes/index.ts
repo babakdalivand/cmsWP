@@ -211,6 +211,21 @@ router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
   });
 });
 
+// ── Profile update ────────────────────────────────────────────────────────────
+router.patch('/auth/profile', authMiddleware, async (req: Request, res: Response) => {
+  const userId = (req as any).user.userId;
+  const { displayName, avatarUrl } = req.body;
+  const updates: string[] = [];
+  const params: any[] = [];
+  if (displayName !== undefined) { updates.push('display_name=?'); params.push(displayName); }
+  if (avatarUrl   !== undefined) { updates.push('avatar_url=?');   params.push(avatarUrl); }
+  if (!updates.length) return res.status(400).json({ error: 'هیچ فیلدی برای به‌روزرسانی وجود ندارد' });
+  params.push(userId);
+  await query(`UPDATE users SET ${updates.join(', ')} WHERE id=?`, params);
+  const row = await query('SELECT id, wp_user_id, username, display_name, email, role, avatar_url FROM users WHERE id=?', [userId]);
+  res.json(row[0] || {});
+});
+
 // ── Fix role: update user to admin in DB (for role mismatch fix) ──────────────
 router.post('/auth/fix-role', authMiddleware, async (req: Request, res: Response) => {
   const user = (req as any).user;
