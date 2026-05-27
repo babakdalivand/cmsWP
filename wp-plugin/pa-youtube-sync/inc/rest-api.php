@@ -245,7 +245,103 @@ function pays_rest_get_settings(): WP_REST_Response {
 }
 
 function pays_rest_set_settings( WP_REST_Request $req ): WP_REST_Response {
-    if ($req->get_param('api_key'))       update_option('pays_api_key',       sanitize_text_field($req->get_param('api_key')));
-    if ($req->get_param('sync_interval')) update_option('pays_sync_interval', sanitize_key($req->get_param('sync_interval')));
+    $map = [
+        'api_key'        => 'pays_api_key',
+        'sync_interval'  => 'pays_sync_interval',
+        'pays_ai_enabled'   => 'pays_ai_enabled',
+        'pays_ai_provider'  => 'pays_ai_provider',
+        'pays_ai_api_key'   => 'pays_ai_api_key',
+        'pays_ai_model'     => 'pays_ai_model',
+        'pays_ai_lang'      => 'pays_ai_lang',
+        'pays_auto_article' => 'pays_auto_article',
+    ];
+    foreach ( $map as $param => $option ) {
+        if ( null !== $req->get_param( $param ) ) {
+            update_option( $option, sanitize_text_field( (string) $req->get_param( $param ) ) );
+        }
+    }
     return pays_rest_get_settings();
+}
+
+/* ── AI SEO ─────────────────────────────────────────────────────────── */
+
+add_action( 'rest_api_init', function () {
+    $admin = fn() => current_user_can('manage_options');
+
+    // Transcript
+    register_rest_route('pa-yt/v1', '/transcript/search', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_transcript_search', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/transcript/(?P<yt_id>[\w-]+)', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_get_transcript', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/transcript/(?P<yt_id>[\w-]+)/fetch', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_fetch_transcript', 'permission_callback' => $admin ],
+    ]);
+
+    // AI Content
+    register_rest_route('pa-yt/v1', '/ai/(?P<post_id>\d+)', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_get_ai', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/ai/(?P<post_id>\d+)/generate', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_generate_ai', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/ai/(?P<post_id>\d+)/apply', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_apply_ai', 'permission_callback' => $admin ],
+    ]);
+});
+
+function pays_rest_transcript_search( WP_REST_Request $req ): WP_REST_Response {
+    $q = sanitize_text_field( $req->get_param('q') ?? '' );
+    if ( ! $q ) return new WP_REST_Response( [], 200 );
+    return new WP_REST_Response( PAYS_Transcript::search( $q ), 200 );
+}
+
+function pays_rest_get_transcript( WP_REST_Request $req ): WP_REST_Response {
+    $yt_id = sanitize_text_field( $req->get_param('yt_id') );
+    $lang  = sanitize_key( $req->get_param('lang') ?: 'en' );
+    $row   = PAYS_Transcript::get( $yt_id, $lang );
+    return $row
+        ? new WP_REST_Response( $row, 200 )
+        : new WP_REST_Response( [ 'error' => 'No transcript found' ], 404 );
+}
+
+function pays_rest_fetch_transcript( WP_REST_Request $req ): WP_REST_Response {
+    $yt_id = sanitize_text_field( $req->get_param('yt_id') );
+    $lang  = sanitize_key( $req->get_param('lang') ?: 'en' );
+    $data  = PAYS_Transcript::fetch( $yt_id, $lang, true );
+    return empty( $data['raw_text'] )
+        ? new WP_REST_Response( [ 'error' => 'Transcript not available for this video' ], 404 )
+        : new WP_REST_Response( $data, 200 );
+}
+
+function pays_rest_get_ai( WP_REST_Request $req ): WP_REST_Response {
+    $post_id = (int) $req->get_param('post_id');
+    $lang    = sanitize_key( $req->get_param('lang') ?: 'en' );
+    $row     = PAYS_AI_SEO::get( $post_id, $lang );
+    return $row
+        ? new WP_REST_Response( $row, 200 )
+        : new WP_REST_Response( [ 'error' => 'No AI content generated yet' ], 404 );
+}
+
+function pays_rest_generate_ai( WP_REST_Request $req ): WP_REST_Response {
+    $post_id = (int) $req->get_param('post_id');
+    $yt_id   = sanitize_text_field( $req->get_param('yt_id') ?: get_post_meta( $post_id, 'pa_youtube_id', true ) );
+    $lang    = sanitize_key( $req->get_param('lang') ?: get_option('pays_ai_lang','en') );
+
+    if ( ! $yt_id ) return new WP_REST_Response( [ 'error' => 'yt_id required' ], 400 );
+
+    $result = PAYS_AI_SEO::generate( $post_id, $yt_id, $lang );
+    return is_wp_error( $result )
+        ? new WP_REST_Response( [ 'error' => $result->get_error_message() ], 500 )
+        : new WP_REST_Response( $result, 200 );
+}
+
+function pays_rest_apply_ai( WP_REST_Request $req ): WP_REST_Response {
+    $post_id = (int) $req->get_param('post_id');
+    $lang    = sanitize_key( $req->get_param('lang') ?: 'en' );
+    $ai      = PAYS_AI_SEO::get( $post_id, $lang );
+    if ( ! $ai ) return new WP_REST_Response( [ 'error' => 'No AI content found' ], 404 );
+    PAYS_AI_SEO::apply_to_post( $post_id, $ai );
+    return new WP_REST_Response( [ 'applied' => true, 'post_id' => $post_id ], 200 );
 }

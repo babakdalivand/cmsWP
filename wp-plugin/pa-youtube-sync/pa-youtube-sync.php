@@ -17,8 +17,12 @@ require_once PAYS_DIR . 'inc/api.php';
 require_once PAYS_DIR . 'inc/importer.php';
 require_once PAYS_DIR . 'inc/cron.php';
 require_once PAYS_DIR . 'inc/webhook.php';
+require_once PAYS_DIR . 'inc/transcript.php';
+require_once PAYS_DIR . 'inc/ai-seo.php';
+require_once PAYS_DIR . 'inc/schema.php';
 require_once PAYS_DIR . 'inc/rest-api.php';
 require_once PAYS_DIR . 'inc/admin.php';
+require_once PAYS_DIR . 'inc/ai-admin.php';
 require_once PAYS_DIR . 'inc/shortcodes.php';
 
 register_activation_hook(   __FILE__, 'pays_activate'   );
@@ -49,6 +53,48 @@ function pays_create_tables(): void {
             action     VARCHAR(16) NOT NULL DEFAULT 'created',
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX (channel_id), INDEX (yt_id)
+        ) $c");
+    }
+
+    // Transcripts
+    $tr = $wpdb->prefix . 'pays_transcripts';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$tr'") !== $tr ) {
+        $wpdb->query("CREATE TABLE $tr (
+            id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            yt_id       VARCHAR(64) NOT NULL,
+            language    VARCHAR(10) NOT NULL DEFAULT 'en',
+            source      VARCHAR(20) NOT NULL DEFAULT 'auto',
+            raw_text    LONGTEXT,
+            timed_json  LONGTEXT,
+            word_count  INT DEFAULT 0,
+            fetched_at  DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY yt_lang (yt_id, language),
+            FULLTEXT KEY ft_transcript (raw_text)
+        ) $c");
+    }
+
+    // AI Content
+    $ai = $wpdb->prefix . 'pays_ai_content';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$ai'") !== $ai ) {
+        $wpdb->query("CREATE TABLE $ai (
+            id                BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            post_id           BIGINT UNSIGNED NOT NULL,
+            yt_id             VARCHAR(64) NOT NULL,
+            language          VARCHAR(10) NOT NULL DEFAULT 'en',
+            seo_title         VARCHAR(200),
+            meta_description  VARCHAR(320),
+            excerpt           TEXT,
+            tags              TEXT,
+            faq_schema        LONGTEXT,
+            article_content   LONGTEXT,
+            schema_json       LONGTEXT,
+            ai_provider       VARCHAR(20),
+            model             VARCHAR(50),
+            prompt_tokens     INT DEFAULT 0,
+            completion_tokens INT DEFAULT 0,
+            generated_at      DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE KEY post_lang (post_id, language),
+            INDEX (yt_id)
         ) $c");
     }
 

@@ -11,6 +11,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: wp-plugin/pa-youtube-sync/admin-ui/package-lock.json
+
+      - name: Build React admin UI
+        working-directory: wp-plugin/pa-youtube-sync/admin-ui
+        run: npm ci && npm run build
+
       - name: Deploy mini-app via SSH
         uses: appleboy/ssh-action@v1.0.3
         with:
