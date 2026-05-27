@@ -590,8 +590,8 @@ function ShortsTab() {
   const [search, setSearch] = useState('');
   const [sort,   setSort]   = useState<'published_at' | 'yt_views'>('published_at');
   const [order,  setOrder]  = useState<'DESC' | 'ASC'>('DESC');
-  const { data: pendingData, isLoading: pendingLoading } = useYT('/queue', { status: 'pending', type: 'short', limit: 50, sort, order });
-  const { data: approvedData, isLoading: approvedLoading } = useYT('/queue', { status: 'approved', type: 'short', limit: 30, sort, order });
+  const { data: pendingData, isLoading: pendingLoading } = useYT('/queue', { status: 'pending', type: 'short', limit: 200, sort, order });
+  const { data: approvedData, isLoading: approvedLoading } = useYT('/queue', { status: 'approved', type: 'short', limit: 100, sort, order });
 
   const pending: any[]  = (pendingData?.items || []).filter((i: any) => i.type === 'short');
   const approved: any[] = (approvedData?.items || []).filter((i: any) => i.type === 'short');
@@ -652,16 +652,27 @@ function ShortsTab() {
       {/* Stats row */}
       <div className="grid grid-cols-2 gap-3">
         <div className="raha-card p-3 text-center">
-          <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>{pending.length}</p>
+          <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>
+            {pendingData?.total ?? pending.length}
+          </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--label)' }}>شورت در انتظار</p>
         </div>
         <div className="raha-card p-3 text-center">
-          <p className="text-2xl font-bold" style={{ color: '#22c55e' }}>{approved.length}</p>
+          <p className="text-2xl font-bold" style={{ color: '#22c55e' }}>
+            {approvedData?.total ?? approved.length}
+          </p>
           <p className="text-xs mt-0.5" style={{ color: 'var(--label)' }}>شورت منتشر</p>
         </div>
       </div>
 
-      <p className="text-sm font-semibold">شورت‌های در انتظار ({allPending.length})</p>
+      <p className="text-sm font-semibold">
+        شورت‌های در انتظار ({search ? allPending.length : (pendingData?.total ?? allPending.length)})
+        {pendingData?.total > pending.length && !search && (
+          <span className="text-xs font-normal mr-1" style={{ color: 'var(--label)' }}>
+            — نمایش {pending.length} تا
+          </span>
+        )}
+      </p>
 
       {(pendingLoading || approvedLoading) && (
         <p className="text-center text-sm py-4" style={{ color: 'var(--label)' }}>بارگذاری...</p>

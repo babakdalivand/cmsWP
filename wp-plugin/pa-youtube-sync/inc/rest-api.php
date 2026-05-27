@@ -144,7 +144,7 @@ function pays_rest_list_queue( WP_REST_Request $req ): WP_REST_Response {
     global $wpdb;
     $q      = $wpdb->prefix . 'pays_queue';
     $status = sanitize_key($req->get_param('status') ?: 'pending');
-    $limit  = min((int)($req->get_param('limit') ?: 50), 100);
+    $limit  = min((int)($req->get_param('limit') ?: 50), 500);
     $offset = (int)($req->get_param('offset') ?: 0);
     $type   = sanitize_key($req->get_param('type') ?: '');
 
