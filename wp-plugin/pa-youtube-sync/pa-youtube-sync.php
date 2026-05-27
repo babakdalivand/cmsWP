@@ -17,7 +17,6 @@ require_once PAYS_DIR . 'inc/api.php';
 require_once PAYS_DIR . 'inc/importer.php';
 require_once PAYS_DIR . 'inc/cron.php';
 require_once PAYS_DIR . 'inc/webhook.php';
-require_once PAYS_DIR . 'inc/queue.php';
 require_once PAYS_DIR . 'inc/rest-api.php';
 require_once PAYS_DIR . 'inc/admin.php';
 require_once PAYS_DIR . 'inc/shortcodes.php';
