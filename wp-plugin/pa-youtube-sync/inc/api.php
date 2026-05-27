@@ -132,7 +132,10 @@ class PAYS_API {
         return $h ? sprintf('%d:%02d:%02d',$h,$m,$sec) : sprintf('%d:%02d',$m,$sec);
     }
 
-    public static function is_short( string $iso ): bool {
-        return self::duration_seconds($iso) <= 60;
+    public static function is_short( string $iso, string $title = '', string $description = '' ): bool {
+        $sec = self::duration_seconds($iso);
+        if ( $sec > 0 && $sec <= 180 ) return true;
+        $haystack = strtolower( $title . ' ' . $description );
+        return str_contains( $haystack, '#shorts' ) || str_contains( $haystack, '#short' );
     }
 }

@@ -20,7 +20,7 @@ class PAYS_Importer {
         )) ) return false;
 
         $sec  = PAYS_API::duration_seconds($duration_iso);
-        $type = PAYS_API::is_short($duration_iso) ? 'short' : 'video';
+        $type = PAYS_API::is_short($duration_iso, $snippet['title'] ?? '', $snippet['description'] ?? '') ? 'short' : 'video';
         $pub  = $snippet['publishedAt'] ?? null;
 
         $wpdb->insert($q, [
@@ -107,7 +107,9 @@ class PAYS_Importer {
 
         foreach ($details as $yt_id => $video) {
             $iso      = $video['contentDetails']['duration'] ?? 'PT0S';
-            $is_short = PAYS_API::is_short($iso);
+            $title    = $video['snippet']['title'] ?? '';
+            $desc     = $video['snippet']['description'] ?? '';
+            $is_short = PAYS_API::is_short($iso, $title, $desc);
 
             if ($is_short  && empty($ch['import_shorts']))  { $stats['skipped']++; continue; }
             if (!$is_short && empty($ch['import_videos']))  { $stats['skipped']++; continue; }
