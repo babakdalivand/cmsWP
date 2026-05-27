@@ -1272,25 +1272,41 @@ function SettingsTab() {
     queryFn:  () => api.get('/users').then(r => r.data),
   });
 
+  const [saveError, setSaveError]         = useState('');
+  const [syncError, setSyncError]         = useState('');
+  const [reclassifyError, setReclassifyError] = useState('');
+
+  const errMsg = (e: any) =>
+    e?.response?.data?.error || e?.response?.data?.message || e?.message || 'خطای ناشناخته';
+
   const save = useMutation({
     mutationFn: () => api.patch('/youtube/settings', {
       ...(apiKey ? { api_key: apiKey } : {}),
       sync_interval: interval,
     }).then(r => r.data),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['yt', '/settings'] }); alert('✅ ذخیره شد'); setApiKey(''); },
+    onSuccess: () => {
+      setSaveError('');
+      qc.invalidateQueries({ queryKey: ['yt', '/settings'] });
+      alert('✅ ذخیره شد');
+      setApiKey('');
+    },
+    onError: (e: any) => setSaveError(errMsg(e)),
   });
 
   const sync = useMutation({
     mutationFn: () => api.post('/youtube/sync').then(r => r.data),
-    onSuccess: () => alert('✅ همگام‌سازی انجام شد'),
+    onSuccess: () => { setSyncError(''); alert('✅ همگام‌سازی انجام شد'); },
+    onError: (e: any) => setSyncError(errMsg(e)),
   });
 
   const reclassify = useMutation({
     mutationFn: () => api.post('/youtube/queue/reclassify').then(r => r.data),
     onSuccess: (d) => {
+      setReclassifyError('');
       qc.invalidateQueries({ queryKey: ['yt'] });
       alert(`✅ بازطبقه‌بندی انجام شد\nشورت: ${d.shorts} | ویدیو: ${d.videos}`);
     },
+    onError: (e: any) => setReclassifyError(errMsg(e)),
   });
 
   const changeRole = useMutation({
@@ -1352,25 +1368,40 @@ function SettingsTab() {
             </div>
           )}
 
-          <button onClick={() => save.mutate()} disabled={save.isPending}
+          <button onClick={() => { setSaveError(''); save.mutate(); }} disabled={save.isPending}
             className="w-full py-3 rounded-xl text-sm font-bold"
             style={{ background: 'var(--primary)', color: '#fff', opacity: save.isPending ? .6 : 1 }}>
             {save.isPending ? 'در حال ذخیره...' : 'ذخیره تنظیمات'}
           </button>
+          {saveError && (
+            <div className="rounded-lg px-3 py-2 text-xs" style={{ background: '#fee2e2', color: '#dc2626' }}>
+              ❌ خطا: {saveError}
+            </div>
+          )}
 
-          <button onClick={() => sync.mutate()} disabled={sync.isPending}
+          <button onClick={() => { setSyncError(''); sync.mutate(); }} disabled={sync.isPending}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <RefreshCw size={16} className={sync.isPending ? 'animate-spin' : ''} />
             {sync.isPending ? 'در حال همگام‌سازی...' : 'همگام‌سازی دستی'}
           </button>
+          {syncError && (
+            <div className="rounded-lg px-3 py-2 text-xs" style={{ background: '#fee2e2', color: '#dc2626' }}>
+              ❌ خطا: {syncError}
+            </div>
+          )}
 
-          <button onClick={() => reclassify.mutate()} disabled={reclassify.isPending}
+          <button onClick={() => { setReclassifyError(''); reclassify.mutate(); }} disabled={reclassify.isPending}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--primary)' }}>
             <Smartphone size={16} className={reclassify.isPending ? 'animate-spin' : ''} />
             {reclassify.isPending ? 'در حال بازطبقه‌بندی...' : 'بازطبقه‌بندی شورت‌ها'}
           </button>
+          {reclassifyError && (
+            <div className="rounded-lg px-3 py-2 text-xs" style={{ background: '#fee2e2', color: '#dc2626' }}>
+              ❌ خطا: {reclassifyError}
+            </div>
+          )}
         </>
       )}
 

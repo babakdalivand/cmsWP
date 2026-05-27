@@ -707,7 +707,7 @@ function pays_rest_reclassify_queue(): WP_REST_Response {
     global $wpdb;
     $q = $wpdb->prefix . 'pays_queue';
 
-    $rows = $wpdb->get_results( "SELECT id, yt_id, duration_sec, title, description FROM $q WHERE status='pending'", ARRAY_A );
+    $rows = $wpdb->get_results( "SELECT id, yt_id, channel_id, duration_sec, title, description FROM $q WHERE status='pending'", ARRAY_A );
     if ( empty($rows) ) return new WP_REST_Response( ['total'=>0,'shorts'=>0,'videos'=>0], 200 );
 
     $api_key    = get_option('pays_api_key', '');

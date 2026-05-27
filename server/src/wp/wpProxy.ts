@@ -28,7 +28,7 @@ export async function wpRequest<T = any>(
     url: `${base}${endpoint}`,
     headers: { Authorization: `Basic ${AUTH}`, 'Content-Type': 'application/json' },
     params,
-    timeout: config.wp.url ? 12000 : 5000,
+    timeout: config.wp.url ? 60000 : 5000,
   };
   if (data) cfg.data = data;
   const res = await axios(cfg);
