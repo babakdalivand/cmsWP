@@ -1,5 +1,5 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, Image, Sparkles, Activity } from 'lucide-react';
+import { LayoutDashboard, FileText, Image, Sparkles, Activity, Youtube } from 'lucide-react';
 
 interface Tab {
   path: string;
@@ -12,7 +12,7 @@ const TABS: Tab[] = [
   { path: '/',          icon: LayoutDashboard, label: 'داشبورد' },
   { path: '/wp-posts',  icon: FileText,        label: 'محتوا', match: ['/wp-posts', '/wp-edit', '/content'] },
   { path: '/create',    icon: Sparkles,        label: 'ایجاد' },
-  { path: '/media',     icon: Image,           label: 'رسانه' },
+  { path: '/youtube',   icon: Youtube,         label: 'یوتیوب' },
   { path: '/monitoring',icon: Activity,        label: 'نظارت' },
 ];
 

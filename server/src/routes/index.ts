@@ -13,6 +13,12 @@ import {
   getComments, updateComment, deleteComment, createComment,
 } from '../wp/wpProxy';
 import { handleWebhook } from '../bot/telegramBot';
+import {
+  listChannels, addChannel, updateChannel, deleteChannel,
+  listQueue, approveVideo, rejectVideo,
+  listPlaylists, importPlaylist,
+  getAnalytics, runSync, getSettings, saveSettings,
+} from '../youtube/ytController';
 import { query } from '../db/pool';
 
 const router = Router();
@@ -210,5 +216,20 @@ router.get('/monitoring/ai-stats', authMiddleware, requireAdmin, async (_req: Re
   `);
   res.json(rows);
 });
+
+// ── YouTube Manager ───────────────────────────────────────────────────────────
+router.get   ('/youtube/channels',                   authMiddleware, requireAdmin, listChannels);
+router.post  ('/youtube/channels',                   authMiddleware, requireAdmin, addChannel);
+router.patch ('/youtube/channels/:id',               authMiddleware, requireAdmin, updateChannel);
+router.delete('/youtube/channels/:id',               authMiddleware, requireAdmin, deleteChannel);
+router.get   ('/youtube/queue',                      authMiddleware, requireAdmin, listQueue);
+router.post  ('/youtube/queue/:id/approve',          authMiddleware, requireAdmin, approveVideo);
+router.post  ('/youtube/queue/:id/reject',           authMiddleware, requireAdmin, rejectVideo);
+router.get   ('/youtube/channels/:id/playlists',     authMiddleware, requireAdmin, listPlaylists);
+router.post  ('/youtube/playlists/:pl_id/import',    authMiddleware, requireAdmin, importPlaylist);
+router.get   ('/youtube/analytics',                  authMiddleware, requireAdmin, getAnalytics);
+router.post  ('/youtube/sync',                       authMiddleware, requireAdmin, runSync);
+router.get   ('/youtube/settings',                   authMiddleware, requireAdmin, getSettings);
+router.patch ('/youtube/settings',                   authMiddleware, requireAdmin, saveSettings);
 
 export default router;

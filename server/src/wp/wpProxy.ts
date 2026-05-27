@@ -17,11 +17,15 @@ export async function wpRequest<T = any>(
   method: string,
   endpoint: string,
   data?: any,
-  params?: Record<string, any>
+  params?: Record<string, any>,
+  customBase?: string
 ): Promise<T> {
+  const base = customBase
+    ? `${config.wp.url}/wp-json${customBase}`
+    : WP_BASE;
   const cfg: AxiosRequestConfig = {
     method,
-    url: `${WP_BASE}${endpoint}`,
+    url: `${base}${endpoint}`,
     headers: { Authorization: `Basic ${AUTH}`, 'Content-Type': 'application/json' },
     params,
     timeout: config.wp.url ? 12000 : 5000,
