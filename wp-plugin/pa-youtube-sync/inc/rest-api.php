@@ -59,6 +59,11 @@ add_action('rest_api_init', function() {
     register_rest_route('pa-yt/v1', '/queue/reclassify', [
         ['methods'=>'POST', 'callback'=>'pays_rest_reclassify_queue', 'permission_callback'=>$admin],
     ]);
+
+    /* Live channel stats directly from YouTube API */
+    register_rest_route('pa-yt/v1', '/youtube/live-stats', [
+        ['methods'=>'GET', 'callback'=>'pays_rest_live_stats', 'permission_callback'=>$admin],
+    ]);
 });
 
 /* â”€â”€ Channels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -652,6 +657,26 @@ function pays_rest_analytics_snapshot(): WP_REST_Response {
     $a     = new PAYS_Analytics();
     $saved = $a->snapshot_all();
     return new WP_REST_Response( [ 'saved' => $saved ], 200 );
+}
+
+function pays_rest_live_stats( WP_REST_Request $req ): WP_REST_Response {
+    $api_key    = get_option('pays_api_key', '');
+    $channels   = get_option('pays_channels', []);
+    $channel_id = sanitize_text_field( $req->get_param('channel_id') ?: '' );
+
+    if ( !$api_key ) return new WP_REST_Response(['error'=>'API key not set'], 400);
+
+    if ( !$channel_id ) {
+        foreach ( $channels as $ch ) {
+            if ( !empty($ch['active']) ) { $channel_id = $ch['id']; break; }
+        }
+    }
+    if ( !$channel_id && !empty($channels) ) $channel_id = $channels[0]['id'] ?? '';
+    if ( !$channel_id ) return new WP_REST_Response(['error'=>'No channel found'], 404);
+
+    $api  = new PAYS_API($api_key);
+    $data = $api->live_channel_stats($channel_id);
+    return new WP_REST_Response($data, isset($data['error']) ? 400 : 200);
 }
 
 function pays_rest_reclassify_queue(): WP_REST_Response {

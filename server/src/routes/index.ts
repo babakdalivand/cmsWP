@@ -19,7 +19,7 @@ import {
   listPlaylists, importPlaylist,
   getAnalytics, runSync, getSettings, saveSettings,
   getAdvancedAnalytics, getAnalyticsTrends, getAnalyticsBestTimes,
-  getAnalyticsReport, triggerAnalyticsSnapshot, reclassifyQueue,
+  getAnalyticsReport, triggerAnalyticsSnapshot, reclassifyQueue, getLiveStats,
 } from '../youtube/ytController';
 import { query } from '../db/pool';
 import {
@@ -244,6 +244,7 @@ router.get   ('/youtube/analytics/report',           authMiddleware, requireAdmi
 router.post  ('/youtube/analytics/snapshot',         authMiddleware, requireAdmin, triggerAnalyticsSnapshot);
 router.post  ('/youtube/sync',                       authMiddleware, requireAdmin, runSync);
 router.post  ('/youtube/queue/reclassify',           authMiddleware, requireAdmin, reclassifyQueue);
+router.get   ('/youtube/live-stats',                 authMiddleware, getLiveStats);
 router.get   ('/youtube/settings',                   authMiddleware, requireAdmin, getSettings);
 router.patch ('/youtube/settings',                   authMiddleware, requireAdmin, saveSettings);
 

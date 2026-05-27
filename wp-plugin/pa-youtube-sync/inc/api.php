@@ -120,6 +120,78 @@ class PAYS_API {
         return $out;
     }
 
+    /* ── Live channel analytics from YouTube API directly ───────────── */
+
+    public function live_channel_stats( string $channel_id ): array {
+        $ch_data = $this->get('channels', [
+            'part' => 'snippet,statistics',
+            'id'   => $channel_id,
+        ]);
+        $ch = $ch_data['items'][0] ?? null;
+        if ( !$ch ) return ['error' => 'Channel not found'];
+
+        $channel = [
+            'id'          => $channel_id,
+            'name'        => $ch['snippet']['title'],
+            'thumbnail'   => $ch['snippet']['thumbnails']['default']['url'] ?? '',
+            'subscribers' => (int)($ch['statistics']['subscriberCount'] ?? 0),
+            'total_views' => (int)($ch['statistics']['viewCount']       ?? 0),
+            'video_count' => (int)($ch['statistics']['videoCount']      ?? 0),
+        ];
+
+        $search = $this->get('search', [
+            'part'       => 'id',
+            'channelId'  => $channel_id,
+            'type'       => 'video',
+            'order'      => 'viewCount',
+            'maxResults' => 50,
+        ]);
+        $ids = array_map(fn($i) => $i['id']['videoId'], $search['items'] ?? []);
+
+        $videos = [];
+        if ( $ids ) {
+            $details = $this->video_details($ids);
+            foreach ( $details as $yt_id => $v ) {
+                $views    = (int)($v['statistics']['viewCount']    ?? 0);
+                $likes    = (int)($v['statistics']['likeCount']    ?? 0);
+                $comments = (int)($v['statistics']['commentCount'] ?? 0);
+                $dur      = $v['contentDetails']['duration'] ?? 'PT0S';
+                $videos[] = [
+                    'yt_id'        => $yt_id,
+                    'title'        => $v['snippet']['title'],
+                    'thumbnail'    => $v['snippet']['thumbnails']['medium']['url'] ?? '',
+                    'published_at' => $v['snippet']['publishedAt'] ?? '',
+                    'views'        => $views,
+                    'likes'        => $likes,
+                    'comments'     => $comments,
+                    'like_rate'    => $views > 0 ? round($likes / $views * 100, 2) : 0,
+                    'duration_sec' => self::duration_seconds($dur),
+                    'type'         => self::is_short($dur, $v['snippet']['title']) ? 'short' : 'video',
+                ];
+            }
+            usort($videos, fn($a, $b) => $b['views'] - $a['views']);
+        }
+
+        $total_v      = count($videos);
+        $sum_views    = array_sum(array_column($videos, 'views'));
+        $sum_likes    = array_sum(array_column($videos, 'likes'));
+        $sum_comments = array_sum(array_column($videos, 'comments'));
+
+        return [
+            'channel' => $channel,
+            'summary' => [
+                'total_videos'   => $total_v,
+                'total_views'    => $sum_views,
+                'total_likes'    => $sum_likes,
+                'total_comments' => $sum_comments,
+                'avg_views'      => $total_v ? (int)round($sum_views / $total_v) : 0,
+                'avg_likes'      => $total_v ? (int)round($sum_likes / $total_v) : 0,
+                'like_rate'      => $sum_views > 0 ? round($sum_likes / $sum_views * 100, 2) : 0,
+            ],
+            'top' => array_slice($videos, 0, 10),
+        ];
+    }
+
     /* ── Helpers ──────────────────────────────────────────────────────── */
 
     public static function duration_seconds( string $iso ): int {

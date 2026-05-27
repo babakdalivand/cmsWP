@@ -106,6 +106,13 @@ export async function reclassifyQueue(_req: Request, res: Response) {
   catch (e: any) { res.status(500).json({ error: e.message }); }
 }
 
+export async function getLiveStats(req: Request, res: Response) {
+  try {
+    const channel_id = req.query.channel_id as string || '';
+    res.json(await ytApi('GET', `/youtube/live-stats${channel_id ? '?channel_id=' + channel_id : ''}`));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+}
+
 export async function getAdvancedAnalytics(req: Request, res: Response) {
   try {
     const { channel_id = '' } = req.query;

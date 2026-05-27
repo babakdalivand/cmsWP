@@ -721,6 +721,13 @@ function AnalyticsTab() {
   const [aiRec, setAiRec]     = useState<string | null>(null);
   const [aiLoading, setAiLoading] = useState(false);
 
+  // Live stats directly from YouTube API
+  const { data: live, isLoading: liveLoading, refetch: refetchLive } = useQuery({
+    queryKey: ['yt', 'live-stats'],
+    queryFn:  () => api.get('/youtube/live-stats').then(r => r.data),
+    staleTime: 10 * 60 * 1000,
+  });
+
   const { data: advanced, isLoading: advLoading } = useQuery({
     queryKey: ['yt', 'analytics/advanced'],
     queryFn:  () => api.get('/youtube/analytics/advanced').then(r => r.data),
@@ -791,10 +798,12 @@ function AnalyticsTab() {
   async function getAiRecommendations() {
     setAiLoading(true);
     const prompt = `بر اساس این آمار کانال یوتیوب، ۵ توصیه هوشمند برای بهبود عملکرد بده:
-- تعداد ویدیو: ${summary.total_videos || 0}
-- میانگین بازدید: ${summary.avg_views || 0}
-- نرخ لایک: ${summary.avg_like_rate || 0}%
-- روند رشد: ${growth.trend || 'نامشخص'}
+- نام کانال: ${live?.channel?.name || 'نامشخص'}
+- مشترکین: ${live?.channel?.subscribers?.toLocaleString('fa') || 0}
+- کل بازدید کانال: ${live?.channel?.total_views?.toLocaleString('fa') || 0}
+- تعداد ویدیو: ${live?.channel?.video_count || 0}
+- میانگین بازدید (top50): ${live?.summary?.avg_views?.toLocaleString('fa') || 0}
+- نرخ لایک: ${live?.summary?.like_rate || 0}%
 - بهترین ساعت آپلود: ${topSlots[0] ? DOW_FA[topSlots[0].dow] + ' ساعت ' + topSlots[0].hour : 'نامشخص'}
 توصیه‌ها باید عملی، کوتاه و به فارسی باشند.`;
 
@@ -840,35 +849,75 @@ function AnalyticsTab() {
       {loading && <p className="text-center text-sm py-6" style={{ color: 'var(--label)' }}>بارگذاری...</p>}
 
       {/* ── Overview ── */}
-      {section === 'overview' && !loading && (
+      {section === 'overview' && (
         <div className="space-y-3">
-          <div className="grid grid-cols-2 gap-3">
-            {[
-              { label: 'کل ویدیو',    value: summary.total_videos   || 0, color: 'var(--primary)' },
-              { label: 'کل بازدید',   value: parseInt(summary.total_views  || 0).toLocaleString(), color: '#22c55e' },
-              { label: 'میانگین بازدید', value: parseInt(summary.avg_views || 0).toLocaleString(), color: '#3b82f6' },
-              { label: 'نرخ لایک',    value: (summary.avg_like_rate || 0) + '%', color: '#f59e0b' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="raha-card p-3 text-center">
-                <p className="text-xl font-bold" style={{ color }}>{value}</p>
-                <p className="text-[10px] mt-0.5" style={{ color: 'var(--label)' }}>{label}</p>
-              </div>
-            ))}
-          </div>
+          {liveLoading && (
+            <p className="text-center text-sm py-4" style={{ color: 'var(--label)' }}>دریافت آمار از یوتیوب...</p>
+          )}
 
-          {/* Weekly deltas */}
-          {report?.deltas && (
+          {/* Channel card */}
+          {live?.channel && (
+            <div className="raha-card p-3 flex items-center gap-3">
+              <img src={live.channel.thumbnail} alt={live.channel.name}
+                className="w-12 h-12 rounded-full object-cover" />
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-bold truncate">{live.channel.name}</p>
+                <p className="text-xs mt-0.5" style={{ color: 'var(--label)' }}>
+                  {live.channel.subscribers?.toLocaleString('fa')} مشترک
+                </p>
+              </div>
+              <button onClick={() => refetchLive()}
+                className="text-[10px] px-2 py-1 rounded-lg"
+                style={{ background: 'var(--surface)', color: 'var(--label)' }}>
+                <RefreshCw size={12} />
+              </button>
+            </div>
+          )}
+
+          {/* Live stats grid */}
+          {live?.channel && (
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                { label: 'کل بازدید کانال',  value: live.channel.total_views?.toLocaleString('fa'), color: '#22c55e' },
+                { label: 'کل ویدیو کانال',   value: live.channel.video_count?.toLocaleString('fa'), color: 'var(--primary)' },
+                { label: 'میانگین بازدید',   value: live.summary?.avg_views?.toLocaleString('fa'), color: '#3b82f6' },
+                { label: 'نرخ لایک',          value: (live.summary?.like_rate || 0) + '%', color: '#f59e0b' },
+                { label: 'کل لایک (top50)',   value: live.summary?.total_likes?.toLocaleString('fa'), color: '#ec4899' },
+                { label: 'کل کامنت (top50)',  value: live.summary?.total_comments?.toLocaleString('fa'), color: '#8b5cf6' },
+              ].map(({ label, value, color }) => (
+                <div key={label} className="raha-card p-3 text-center">
+                  <p className="text-lg font-bold" style={{ color }}>{value ?? '—'}</p>
+                  <p className="text-[10px] mt-0.5" style={{ color: 'var(--label)' }}>{label}</p>
+                </div>
+              ))}
+            </div>
+          )}
+
+          {/* Top 10 videos */}
+          {live?.top?.length > 0 && (
             <div className="raha-card p-3">
-              <p className="text-xs font-semibold mb-2">تغییرات هفته جاری نسبت به هفته قبل</p>
-              <div className="flex gap-4 flex-wrap">
-                {[
-                  { label: 'بازدید', val: report.deltas.views },
-                  { label: 'لایک',   val: report.deltas.likes },
-                  { label: 'کامنت',  val: report.deltas.comments },
-                ].map(({ label, val }) => (
-                  <div key={label} className="flex items-center gap-1.5">
-                    <span className="text-xs" style={{ color: 'var(--label)' }}>{label}</span>
-                    <DeltaBadge value={val} />
+              <p className="text-xs font-semibold mb-3 flex items-center gap-1.5">
+                <Award size={13} style={{ color: '#f59e0b' }} />
+                ۱۰ ویدیوی پربازدید
+              </p>
+              <div className="space-y-2">
+                {live.top.map((v: any, i: number) => (
+                  <div key={v.yt_id} className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold w-4 text-center shrink-0"
+                      style={{ color: i < 3 ? '#f59e0b' : 'var(--label)' }}>{i + 1}</span>
+                    <img src={v.thumbnail} alt={v.title}
+                      className="w-10 h-6 rounded object-cover shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[10px] font-medium truncate">{v.title}</p>
+                      <p className="text-[9px]" style={{ color: 'var(--label)' }}>
+                        {v.views?.toLocaleString('fa')} بازدید · {v.likes?.toLocaleString('fa')} لایک
+                      </p>
+                    </div>
+                    <span className="text-[9px] shrink-0 px-1.5 py-0.5 rounded"
+                      style={{ background: v.type === 'short' ? '#f59e0b20' : 'var(--surface)',
+                               color: v.type === 'short' ? '#f59e0b' : 'var(--label)' }}>
+                      {v.type === 'short' ? 'شورت' : 'ویدیو'}
+                    </span>
                   </div>
                 ))}
               </div>
