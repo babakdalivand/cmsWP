@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # ── Node setup (used by multiple build steps) ─────────────────────
+      # ── Node setup ────────────────────────────────────────────────────
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
@@ -20,40 +20,48 @@ jobs:
             wp-plugin/pa-youtube-sync/admin-ui/package-lock.json
             frontend/package-lock.json
 
-      # ── 1. Build WordPress plugin admin UI ─────────────────────────────
+      # ── 1. Build WP plugin admin UI ───────────────────────────────────
       - name: Build WP plugin admin UI
         working-directory: wp-plugin/pa-youtube-sync/admin-ui
         run: npm ci && npm run build
 
-      # ── 2. Build Netflix frontend (static export) ──────────────────────
+      # ── 2. Build Netflix frontend (static export → out/) ──────────────
       - name: Build Netflix frontend
         working-directory: frontend
-        run: |
-          npm ci
-          npm run build
-          echo "Build output:"
-          ls -lh out/
+        run: npm ci && npm run build
 
-      # ── 3. Deploy mini-app server via SSH ──────────────────────────────
-      - name: Deploy mini-app server
+      # ── 3. Deploy mini-app server + build Telegram client on server ───
+      - name: Deploy mini-app (server + Telegram client)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: 82.198.229.155
           port: 65002
           username: u775839017
           password: ${{ secrets.SSH_PASSWORD }}
-          command_timeout: 120s
+          command_timeout: 300s
           script: |
             export PATH=/opt/alt/alt-nodejs22/root/usr/bin:$PATH
-            cd /home/u775839017/domains/app.persianatheists.com/nodejs
+            BASE=/home/u775839017/domains/app.persianatheists.com/nodejs
+
+            # Pull latest code
+            cd $BASE
             git pull origin main
-            cd server
+
+            # Build Express server
+            cd $BASE/server
             npm install --production
             npm run build
-            touch /home/u775839017/domains/app.persianatheists.com/nodejs/tmp/restart.txt
-            echo "Mini-app server deployed at $(date)"
 
-      # ── 4. Deploy WordPress plugin via SCP ────────────────────────────
+            # Build Telegram mini-app (client)
+            cd $BASE/client
+            npm install
+            npm run build
+
+            # Restart Node.js app
+            touch $BASE/tmp/restart.txt
+            echo "Deployed at $(date)"
+
+      # ── 4. Deploy WP plugin via SCP ───────────────────────────────────
       - name: Deploy WP plugin
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -65,7 +73,7 @@ jobs:
           target: /home/u775839017/domains/persianatheists.com/public_html/wp-content/plugins/pa-youtube-sync
           strip_components: 2
 
-      # ── 5. Deploy WordPress theme via SCP ─────────────────────────────
+      # ── 5. Deploy WP theme via SCP ────────────────────────────────────
       - name: Deploy WP theme
         uses: appleboy/scp-action@v0.1.7
         with:
