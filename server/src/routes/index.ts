@@ -211,6 +211,25 @@ router.get('/stats', authMiddleware, async (req: Request, res: Response) => {
   });
 });
 
+// ── Fix role: update user to admin in DB (for role mismatch fix) ──────────────
+router.post('/auth/fix-role', authMiddleware, async (req: Request, res: Response) => {
+  const user = (req as any).user;
+  try {
+    // Fetch WP role using server-side credentials
+    let newRole = 'editor';
+    try {
+      const wpUser = await wpRequest('GET', `/users/${user.wpUserId}?context=edit`) as any;
+      const roles: string[] = wpUser?.roles ?? [];
+      newRole = roles.includes('administrator') ? 'admin' : 'editor';
+    } catch { /* keep editor */ }
+
+    await query('UPDATE users SET role=? WHERE id=?', [newRole, user.userId]);
+    res.json({ role: newRole, message: 'لطفاً از مینی‌اپ خارج شده و دوباره وارد شوید' });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── WordPress connection diagnostics (admin only) ─────────────────────────────
 router.get('/debug/wp', authMiddleware, requireAdmin, async (_req: Request, res: Response) => {
   const { config } = await import('../config');

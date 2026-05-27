@@ -140,7 +140,7 @@ export async function login(req: Request, res: Response) {
 
     if (!wpUser) {
       try {
-        const meRes = await axios.get(`${config.wp.url}/wp-json/wp/v2/users/me`, {
+        const meRes = await axios.get(`${config.wp.url}/wp-json/wp/v2/users/me?context=edit`, {
           headers: {
             Authorization: 'Basic ' + Buffer.from(`${username}:${password}`).toString('base64'),
           },
