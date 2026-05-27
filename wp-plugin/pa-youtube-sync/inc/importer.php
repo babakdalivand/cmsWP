@@ -103,14 +103,22 @@ class PAYS_Importer {
         $items = $this->api->search_videos($ch['id'], $max);
         if (!$items) return $stats;
 
+        // Fetch the channel's official Shorts playlist for accurate detection
+        $shorts_ids = [];
+        if ( !empty($ch['import_shorts']) ) {
+            $shorts_ids = array_flip( $this->api->get_shorts_ids($ch['id'], 200) );
+        }
+
         $ids     = array_column(array_column($items, 'id'), 'videoId');
         $details = $this->api->video_details($ids);
 
         foreach ($details as $yt_id => $video) {
-            $iso      = $video['contentDetails']['duration'] ?? 'PT0S';
-            $title    = $video['snippet']['title'] ?? '';
-            $desc     = $video['snippet']['description'] ?? '';
-            $is_short = PAYS_API::is_short($iso, $title, $desc);
+            $iso   = $video['contentDetails']['duration'] ?? 'PT0S';
+            $title = $video['snippet']['title'] ?? '';
+            $desc  = $video['snippet']['description'] ?? '';
+
+            $is_short = isset($shorts_ids[$yt_id])
+                || PAYS_API::is_short($iso, $title, $desc);
 
             if ($is_short  && empty($ch['import_shorts']))  { $stats['skipped']++; continue; }
             if (!$is_short && empty($ch['import_videos']))  { $stats['skipped']++; continue; }

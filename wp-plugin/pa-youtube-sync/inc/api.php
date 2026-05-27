@@ -205,9 +205,37 @@ class PAYS_API {
     }
 
     public static function is_short( string $iso, string $title = '', string $description = '' ): bool {
-        $sec = self::duration_seconds($iso);
-        if ( $sec > 0 && $sec <= 180 ) return true;
+        $sec      = self::duration_seconds($iso);
         $haystack = strtolower( $title . ' ' . $description );
-        return str_contains( $haystack, '#shorts' ) || str_contains( $haystack, '#short' );
+        $has_tag  = str_contains( $haystack, '#shorts' ) || str_contains( $haystack, '#short' );
+        if ( $sec > 180 ) return false;
+        if ( $sec <= 60 ) return true;
+        return $has_tag; // 61–180s: only Short if explicitly tagged
+    }
+
+    public static function shorts_playlist_id( string $channel_id ): string {
+        return 'UUSH' . substr( $channel_id, 2 );
+    }
+
+    public function get_shorts_ids( string $channel_id, int $max = 200 ): array {
+        $pl_id = self::shorts_playlist_id( $channel_id );
+        $ids   = [];
+        $token = null;
+        while ( count($ids) < $max ) {
+            $p = [
+                'part'       => 'contentDetails',
+                'playlistId' => $pl_id,
+                'maxResults' => min(50, $max - count($ids)),
+            ];
+            if ( $token ) $p['pageToken'] = $token;
+            $d = $this->get('playlistItems', $p);
+            if ( empty($d['items']) ) break;
+            foreach ( $d['items'] as $item ) {
+                $ids[] = $item['contentDetails']['videoId'];
+            }
+            $token = $d['nextPageToken'] ?? null;
+            if ( !$token ) break;
+        }
+        return $ids;
     }
 }

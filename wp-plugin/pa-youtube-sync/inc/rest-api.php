@@ -710,13 +710,19 @@ function pays_rest_reclassify_queue(): WP_REST_Response {
     $rows = $wpdb->get_results( "SELECT id, yt_id, duration_sec, title, description FROM $q WHERE status='pending'", ARRAY_A );
     if ( empty($rows) ) return new WP_REST_Response( ['total'=>0,'shorts'=>0,'videos'=>0], 200 );
 
-    // Fetch fresh view counts from YouTube API in batches of 50
-    $api_key = get_option('pays_api_key', '');
-    $views_map = [];
+    $api_key    = get_option('pays_api_key', '');
+    $views_map  = [];
+    $shorts_map = [];
+
     if ( $api_key ) {
-        $api    = new PAYS_API($api_key);
-        $chunks = array_chunk( array_column($rows, 'yt_id'), 50 );
-        foreach ( $chunks as $chunk ) {
+        $api = new PAYS_API($api_key);
+
+        $channel_ids = array_unique( array_column($rows, 'channel_id') );
+        foreach ( $channel_ids as $ch_id ) {
+            foreach ( $api->get_shorts_ids($ch_id, 500) as $vid ) $shorts_map[$vid] = true;
+        }
+
+        foreach ( array_chunk( array_column($rows, 'yt_id'), 50 ) as $chunk ) {
             $details = $api->video_details($chunk);
             foreach ( $details as $yt_id => $v ) {
                 $views_map[$yt_id] = (int)($v['statistics']['viewCount'] ?? 0);
@@ -727,7 +733,8 @@ function pays_rest_reclassify_queue(): WP_REST_Response {
     $updated = 0;
     foreach ( $rows as $row ) {
         $iso      = 'PT' . (int)$row['duration_sec'] . 'S';
-        $is_short = PAYS_API::is_short( $iso, $row['title'], $row['description'] );
+        $is_short = isset($shorts_map[$row['yt_id']])
+            || PAYS_API::is_short( $iso, $row['title'], $row['description'] );
         $new_type = $is_short ? 'short' : 'video';
         $data     = ['type' => $new_type];
         if ( isset($views_map[$row['yt_id']]) ) $data['yt_views'] = $views_map[$row['yt_id']];
