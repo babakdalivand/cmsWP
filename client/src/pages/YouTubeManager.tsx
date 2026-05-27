@@ -108,7 +108,10 @@ function ChannelsTab() {
 
   const sync = useMutation({
     mutationFn: () => api.post('/youtube/sync').then(r => r.data),
-    onSuccess:  (d) => alert(`✅ ${Object.values(d.results || {}).reduce((a: any, r: any) => a + (r.queued || 0), 0)} ویدیو به صف اضافه شد`),
+    onSuccess:  (d) => {
+      const total = Object.values(d.results || {}).reduce((a: any, r: any) => a + (r.queued || 0), 0);
+      qc.invalidateQueries({ queryKey: ['yt', '/queue'] });
+    },
   });
 
   return (
@@ -653,7 +656,7 @@ function PlaylistsTab() {
 
   const importPl = useMutation({
     mutationFn: (pl_id: string) => api.post(`/youtube/playlists/${encodeURIComponent(pl_id)}/import`, { channel_id: chId }).then(r => r.data),
-    onSuccess:  (d) => { qc.invalidateQueries({ queryKey: ['yt', '/queue'] }); alert(`✅ ${d.queued} ویدیو به صف اضافه شد`); },
+    onSuccess:  (d) => { qc.invalidateQueries({ queryKey: ['yt', '/queue'] }); },
   });
 
   return (
@@ -755,7 +758,7 @@ function AnalyticsTab() {
   const qc = useQueryClient();
   const snapshot = useMutation({
     mutationFn: () => api.post('/youtube/analytics/snapshot'),
-    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['yt', 'analytics'] }); alert('✅ اسنپ‌شات ذخیره شد'); },
+    onSuccess:  () => { qc.invalidateQueries({ queryKey: ['yt', 'analytics'] }); },
   });
 
   const summary    = advanced?.summary    || {};
@@ -1261,10 +1264,17 @@ function AnalyticsTab() {
 ═══════════════════════════════════════════════════════════════ */
 function SettingsTab() {
   const qc = useQueryClient();
-  const { data: cfg } = useYT('/settings');
+  const { data: cfg, refetch: refetchCfg } = useYT('/settings');
   const [apiKey, setApiKey] = useState('');
   const [interval, setInterval] = useState('hourly');
   const [activeSection, setActiveSection] = useState<'sync' | 'notifications' | 'users'>('sync');
+
+  const [saveMsg,       setSaveMsg]       = useState('');
+  const [saveMsgType,   setSaveMsgType]   = useState<'ok'|'err'>('ok');
+  const [syncMsg,       setSyncMsg]       = useState('');
+  const [syncMsgType,   setSyncMsgType]   = useState<'ok'|'err'>('ok');
+  const [reclMsg,       setReclMsg]       = useState('');
+  const [reclMsgType,   setReclMsgType]   = useState<'ok'|'err'>('ok');
 
   // Users management
   const { data: users = [] } = useQuery({
@@ -1272,41 +1282,45 @@ function SettingsTab() {
     queryFn:  () => api.get('/users').then(r => r.data),
   });
 
-  const [saveError, setSaveError]         = useState('');
-  const [syncError, setSyncError]         = useState('');
-  const [reclassifyError, setReclassifyError] = useState('');
-
   const errMsg = (e: any) =>
     e?.response?.data?.error || e?.response?.data?.message || e?.message || 'خطای ناشناخته';
+
+  const toast = (set: (v:string)=>void, setT: (v:'ok'|'err')=>void, msg: string, type: 'ok'|'err') => {
+    setT(type); set(msg);
+    setTimeout(() => set(''), 5000);
+  };
 
   const save = useMutation({
     mutationFn: () => api.patch('/youtube/settings', {
       ...(apiKey ? { api_key: apiKey } : {}),
       sync_interval: interval,
     }).then(r => r.data),
-    onSuccess: () => {
-      setSaveError('');
-      qc.invalidateQueries({ queryKey: ['yt', '/settings'] });
-      alert('✅ ذخیره شد');
+    onSuccess: (data) => {
+      toast(setSaveMsg, setSaveMsgType, '✅ ذخیره شد', 'ok');
       setApiKey('');
+      // Force refetch to update api_key status
+      refetchCfg();
     },
-    onError: (e: any) => setSaveError(errMsg(e)),
+    onError: (e: any) => toast(setSaveMsg, setSaveMsgType, '❌ ' + errMsg(e), 'err'),
   });
 
   const sync = useMutation({
     mutationFn: () => api.post('/youtube/sync').then(r => r.data),
-    onSuccess: () => { setSyncError(''); alert('✅ همگام‌سازی انجام شد'); },
-    onError: (e: any) => setSyncError(errMsg(e)),
+    onSuccess: (d) => {
+      const total = Object.values(d.results || {}).reduce((s: number, r: any) => s + (r.queued || 0), 0);
+      toast(setSyncMsg, setSyncMsgType, `✅ همگام‌سازی انجام شد — ${total} ویدیو به صف اضافه شد`, 'ok');
+      qc.invalidateQueries({ queryKey: ['yt', '/queue'] });
+    },
+    onError: (e: any) => toast(setSyncMsg, setSyncMsgType, '❌ ' + errMsg(e), 'err'),
   });
 
   const reclassify = useMutation({
     mutationFn: () => api.post('/youtube/queue/reclassify').then(r => r.data),
     onSuccess: (d) => {
-      setReclassifyError('');
+      toast(setReclMsg, setReclMsgType, `✅ بازطبقه‌بندی انجام شد — شورت: ${d.shorts} | ویدیو: ${d.videos}`, 'ok');
       qc.invalidateQueries({ queryKey: ['yt'] });
-      alert(`✅ بازطبقه‌بندی انجام شد\nشورت: ${d.shorts} | ویدیو: ${d.videos}`);
     },
-    onError: (e: any) => setReclassifyError(errMsg(e)),
+    onError: (e: any) => toast(setReclMsg, setReclMsgType, '❌ ' + errMsg(e), 'err'),
   });
 
   const changeRole = useMutation({
@@ -1368,38 +1382,41 @@ function SettingsTab() {
             </div>
           )}
 
-          <button onClick={() => { setSaveError(''); save.mutate(); }} disabled={save.isPending}
+          <button onClick={() => save.mutate()} disabled={save.isPending}
             className="w-full py-3 rounded-xl text-sm font-bold"
             style={{ background: 'var(--primary)', color: '#fff', opacity: save.isPending ? .6 : 1 }}>
             {save.isPending ? 'در حال ذخیره...' : 'ذخیره تنظیمات'}
           </button>
-          {saveError && (
-            <div className="rounded-lg px-3 py-2 text-xs" style={{ background: '#fee2e2', color: '#dc2626' }}>
-              ❌ خطا: {saveError}
+          {saveMsg && (
+            <div className="rounded-lg px-3 py-2 text-xs font-medium"
+              style={{ background: saveMsgType==='ok' ? '#dcfce7' : '#fee2e2', color: saveMsgType==='ok' ? '#16a34a' : '#dc2626' }}>
+              {saveMsg}
             </div>
           )}
 
-          <button onClick={() => { setSyncError(''); sync.mutate(); }} disabled={sync.isPending}
+          <button onClick={() => sync.mutate()} disabled={sync.isPending}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <RefreshCw size={16} className={sync.isPending ? 'animate-spin' : ''} />
             {sync.isPending ? 'در حال همگام‌سازی...' : 'همگام‌سازی دستی'}
           </button>
-          {syncError && (
-            <div className="rounded-lg px-3 py-2 text-xs" style={{ background: '#fee2e2', color: '#dc2626' }}>
-              ❌ خطا: {syncError}
+          {syncMsg && (
+            <div className="rounded-lg px-3 py-2 text-xs font-medium"
+              style={{ background: syncMsgType==='ok' ? '#dcfce7' : '#fee2e2', color: syncMsgType==='ok' ? '#16a34a' : '#dc2626' }}>
+              {syncMsg}
             </div>
           )}
 
-          <button onClick={() => { setReclassifyError(''); reclassify.mutate(); }} disabled={reclassify.isPending}
+          <button onClick={() => reclassify.mutate()} disabled={reclassify.isPending}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--primary)' }}>
             <Smartphone size={16} className={reclassify.isPending ? 'animate-spin' : ''} />
             {reclassify.isPending ? 'در حال بازطبقه‌بندی...' : 'بازطبقه‌بندی شورت‌ها'}
           </button>
-          {reclassifyError && (
-            <div className="rounded-lg px-3 py-2 text-xs" style={{ background: '#fee2e2', color: '#dc2626' }}>
-              ❌ خطا: {reclassifyError}
+          {reclMsg && (
+            <div className="rounded-lg px-3 py-2 text-xs font-medium"
+              style={{ background: reclMsgType==='ok' ? '#dcfce7' : '#fee2e2', color: reclMsgType==='ok' ? '#16a34a' : '#dc2626' }}>
+              {reclMsg}
             </div>
           )}
         </>
