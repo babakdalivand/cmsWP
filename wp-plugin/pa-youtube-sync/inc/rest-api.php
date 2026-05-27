@@ -446,6 +446,125 @@ function pays_rest_publish_article( WP_REST_Request $req ): WP_REST_Response {
         : new WP_REST_Response( [ 'published' => true, 'url' => get_permalink( $post_id ) ], 200 );
 }
 
+/* ── Smart Moderation ────────────────────────────────────────────────── */
+
+add_action( 'rest_api_init', function () {
+    $admin = fn() => current_user_can('manage_options');
+
+    // Rules CRUD
+    register_rest_route('pa-yt/v1', '/rules', [
+        [ 'methods' => 'GET',  'callback' => 'pays_rest_list_rules',  'permission_callback' => $admin ],
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_save_rule',   'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/rules/(?P<id>\d+)', [
+        [ 'methods' => 'GET',    'callback' => 'pays_rest_get_rule',    'permission_callback' => $admin ],
+        [ 'methods' => 'PATCH',  'callback' => 'pays_rest_update_rule', 'permission_callback' => $admin ],
+        [ 'methods' => 'DELETE', 'callback' => 'pays_rest_delete_rule', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/rules/(?P<id>\d+)/toggle', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_toggle_rule', 'permission_callback' => $admin ],
+    ]);
+
+    // Bulk moderation
+    register_rest_route('pa-yt/v1', '/queue/bulk', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_bulk_moderate', 'permission_callback' => $admin ],
+    ]);
+
+    // Mod log
+    register_rest_route('pa-yt/v1', '/mod-log', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_mod_log', 'permission_callback' => $admin ],
+    ]);
+
+    // Telegram test
+    register_rest_route('pa-yt/v1', '/telegram/test', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_telegram_test', 'permission_callback' => $admin ],
+    ]);
+
+    // Toxicity check
+    register_rest_route('pa-yt/v1', '/toxicity/check', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_toxicity_check', 'permission_callback' => $admin ],
+    ]);
+});
+
+function pays_rest_list_rules(): WP_REST_Response {
+    return new WP_REST_Response( PAYS_Rule_Engine::get_all_rules(), 200 );
+}
+
+function pays_rest_get_rule( WP_REST_Request $req ): WP_REST_Response {
+    $rule = PAYS_Rule_Engine::get_rule( (int) $req->get_param('id') );
+    return $rule
+        ? new WP_REST_Response( $rule, 200 )
+        : new WP_REST_Response( [ 'error' => 'Rule not found' ], 404 );
+}
+
+function pays_rest_save_rule( WP_REST_Request $req ): WP_REST_Response {
+    $data = $req->get_json_params() ?: [];
+    if ( empty( $data['name'] ) ) {
+        return new WP_REST_Response( [ 'error' => 'name required' ], 400 );
+    }
+    $id = PAYS_Rule_Engine::save_rule( $data );
+    return new WP_REST_Response( PAYS_Rule_Engine::get_rule( $id ), 201 );
+}
+
+function pays_rest_update_rule( WP_REST_Request $req ): WP_REST_Response {
+    $data       = $req->get_json_params() ?: [];
+    $data['id'] = (int) $req->get_param('id');
+    if ( ! PAYS_Rule_Engine::get_rule( $data['id'] ) ) {
+        return new WP_REST_Response( [ 'error' => 'Rule not found' ], 404 );
+    }
+    $id = PAYS_Rule_Engine::save_rule( $data );
+    return new WP_REST_Response( PAYS_Rule_Engine::get_rule( $id ), 200 );
+}
+
+function pays_rest_delete_rule( WP_REST_Request $req ): WP_REST_Response {
+    $ok = PAYS_Rule_Engine::delete_rule( (int) $req->get_param('id') );
+    return $ok
+        ? new WP_REST_Response( null, 204 )
+        : new WP_REST_Response( [ 'error' => 'Rule not found' ], 404 );
+}
+
+function pays_rest_toggle_rule( WP_REST_Request $req ): WP_REST_Response {
+    $id      = (int) $req->get_param('id');
+    $enabled = (bool) ( $req->get_json_params()['enabled'] ?? true );
+    $ok      = PAYS_Rule_Engine::toggle_rule( $id, $enabled );
+    return $ok
+        ? new WP_REST_Response( [ 'id' => $id, 'enabled' => $enabled ], 200 )
+        : new WP_REST_Response( [ 'error' => 'Rule not found' ], 404 );
+}
+
+function pays_rest_bulk_moderate( WP_REST_Request $req ): WP_REST_Response {
+    $ids    = array_map( 'intval', (array) ( $req->get_json_params()['ids']    ?? [] ) );
+    $action = sanitize_key( $req->get_json_params()['action'] ?? '' );
+    if ( empty( $ids ) || ! in_array( $action, [ 'approve', 'reject' ], true ) ) {
+        return new WP_REST_Response( [ 'error' => 'ids[] and action (approve|reject) required' ], 400 );
+    }
+    return new WP_REST_Response( pays_bulk_moderate( $ids, $action ), 200 );
+}
+
+function pays_rest_mod_log( WP_REST_Request $req ): WP_REST_Response {
+    $limit    = min( (int) ( $req->get_param('limit')    ?: 50 ), 200 );
+    $offset   = (int) ( $req->get_param('offset')   ?: 0 );
+    $action   = sanitize_key( $req->get_param('action')   ?: '' );
+    $queue_id = (int) ( $req->get_param('queue_id') ?: 0 );
+
+    return new WP_REST_Response( [
+        'items' => PAYS_Mod_Log::get( $limit, $offset, $action, $queue_id ),
+        'total' => PAYS_Mod_Log::count( $action ),
+    ], 200 );
+}
+
+function pays_rest_telegram_test(): WP_REST_Response {
+    $ok = PAYS_Notification::test();
+    return new WP_REST_Response( [ 'sent' => $ok ], $ok ? 200 : 500 );
+}
+
+function pays_rest_toxicity_check( WP_REST_Request $req ): WP_REST_Response {
+    $title = sanitize_text_field( $req->get_json_params()['title'] ?? '' );
+    $desc  = sanitize_textarea_field( $req->get_json_params()['description'] ?? '' );
+    if ( ! $title ) return new WP_REST_Response( [ 'error' => 'title required' ], 400 );
+    return new WP_REST_Response( PAYS_Toxicity::analyze( $title, $desc ), 200 );
+}
+
 function pays_rest_list_series(): WP_REST_Response {
     $terms = get_terms([
         'taxonomy'   => 'pa_series',

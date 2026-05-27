@@ -90,4 +90,33 @@ export const api = {
 
   // Series taxonomy
   getSeries: () => apiFetch('/series'),
+
+  // Rules
+  getRules: () => apiFetch('/rules'),
+  getRule: (id) => apiFetch(`/rules/${id}`),
+  createRule: (data) =>
+    apiFetch('/rules', { method: 'POST', body: JSON.stringify(data) }),
+  updateRule: (id, data) =>
+    apiFetch(`/rules/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteRule: (id) =>
+    apiFetch(`/rules/${id}`, { method: 'DELETE' }),
+  toggleRule: (id, enabled) =>
+    apiFetch(`/rules/${id}/toggle`, { method: 'POST', body: JSON.stringify({ enabled }) }),
+
+  // Bulk moderation
+  bulkModerate: (ids, action) =>
+    apiFetch('/queue/bulk', { method: 'POST', body: JSON.stringify({ ids, action }) }),
+
+  // Moderation log
+  getModLog: (params = {}) => {
+    const q = new URLSearchParams(params).toString();
+    return apiFetch('/mod-log' + (q ? '?' + q : ''));
+  },
+
+  // Telegram test
+  testTelegram: () => apiFetch('/telegram/test', { method: 'POST' }),
+
+  // Toxicity check
+  checkToxicity: (title, description = '') =>
+    apiFetch('/toxicity/check', { method: 'POST', body: JSON.stringify({ title, description }) }),
 };

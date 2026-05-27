@@ -1,17 +1,21 @@
 import { useState } from '@wordpress/element';
 import { TabPanel } from '@wordpress/components';
-import SettingsTab  from './components/SettingsTab';
-import TranscriptTab from './components/TranscriptTab';
-import GenerateTab  from './components/GenerateTab';
-import SchemaTab    from './components/SchemaTab';
-import ArticleTab   from './components/ArticleTab';
+import SettingsTab    from './components/SettingsTab';
+import TranscriptTab  from './components/TranscriptTab';
+import GenerateTab    from './components/GenerateTab';
+import SchemaTab      from './components/SchemaTab';
+import ArticleTab     from './components/ArticleTab';
+import ModerationTab  from './components/ModerationTab';
+import RulesTab       from './components/RulesTab';
 
 const TABS = [
-  { name: 'article',    title: '📰 Article',     className: 'tab-article' },
-  { name: 'generate',   title: '✨ SEO',          className: 'tab-generate' },
+  { name: 'moderation', title: '🛡 Moderation',  className: 'tab-moderation' },
+  { name: 'rules',      title: '⚙️ Rules',        className: 'tab-rules' },
+  { name: 'article',    title: '📰 Article',      className: 'tab-article' },
+  { name: 'generate',   title: '✨ SEO',           className: 'tab-generate' },
   { name: 'transcript', title: '📝 Transcripts',  className: 'tab-transcript' },
   { name: 'schema',     title: '📐 Schema',       className: 'tab-schema' },
-  { name: 'settings',   title: '⚙️ Settings',     className: 'tab-settings' },
+  { name: 'settings',   title: '🔧 Settings',     className: 'tab-settings' },
 ];
 
 export default function App() {
@@ -30,14 +34,16 @@ export default function App() {
             PA YouTube Sync — AI SEO Engine
           </h1>
           <p style={{ margin: 0, color: '#94a3b8', fontSize: 13 }}>
-            Auto-generate transcripts, SEO content, and schema markup
+            Auto-generate transcripts, SEO content, schema markup and smart moderation
           </p>
         </div>
       </div>
 
-      <TabPanel tabs={TABS} initialTabName="generate">
+      <TabPanel tabs={TABS} initialTabName="moderation">
         {(tab) => (
           <div style={{ padding: '16px 0' }}>
+            {tab.name === 'moderation' && <ModerationTab />}
+            {tab.name === 'rules'      && <RulesTab />}
             {tab.name === 'article'    && <ArticleTab />}
             {tab.name === 'generate'   && <GenerateTab />}
             {tab.name === 'transcript' && <TranscriptTab />}

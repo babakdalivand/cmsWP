@@ -27,6 +27,12 @@ require_once PAYS_DIR . 'inc/featured-image.php';
 require_once PAYS_DIR . 'inc/article-generator.php';
 require_once PAYS_DIR . 'inc/article-queue.php';
 require_once PAYS_DIR . 'inc/taxonomy.php';
+require_once PAYS_DIR . 'inc/mod-log.php';
+require_once PAYS_DIR . 'inc/duplicate-detector.php';
+require_once PAYS_DIR . 'inc/toxicity.php';
+require_once PAYS_DIR . 'inc/notification.php';
+require_once PAYS_DIR . 'inc/rule-engine.php';
+require_once PAYS_DIR . 'inc/moderation.php';
 require_once PAYS_DIR . 'inc/rest-api.php';
 require_once PAYS_DIR . 'inc/admin.php';
 require_once PAYS_DIR . 'inc/ai-admin.php';
@@ -138,10 +144,49 @@ function pays_create_tables(): void {
             published_at DATETIME,
             status       VARCHAR(16) NOT NULL DEFAULT 'pending',
             post_id      BIGINT UNSIGNED DEFAULT NULL,
+            notes        TEXT DEFAULT NULL,
             queued_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             reviewed_at  DATETIME DEFAULT NULL,
             UNIQUE KEY yt_id (yt_id),
             INDEX (status), INDEX (channel_id)
+        ) $c");
+    } else {
+        // Add notes column if missing (migration for existing installs)
+        $cols = $wpdb->get_results("SHOW COLUMNS FROM $q LIKE 'notes'");
+        if ( empty( $cols ) ) {
+            $wpdb->query("ALTER TABLE $q ADD COLUMN notes TEXT DEFAULT NULL AFTER post_id");
+        }
+    }
+
+    // Moderation rules
+    $rules = $wpdb->prefix . 'pays_rules';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$rules'") !== $rules ) {
+        $wpdb->query("CREATE TABLE $rules (
+            id             BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            name           VARCHAR(200) NOT NULL,
+            enabled        TINYINT(1) NOT NULL DEFAULT 1,
+            priority       TINYINT UNSIGNED NOT NULL DEFAULT 10,
+            condition_mode VARCHAR(3) NOT NULL DEFAULT 'all',
+            conditions     LONGTEXT NOT NULL,
+            actions        LONGTEXT NOT NULL,
+            created_at     DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX (enabled), INDEX (priority)
+        ) $c");
+    }
+
+    // Moderation log
+    $mlog = $wpdb->prefix . 'pays_mod_log';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$mlog'") !== $mlog ) {
+        $wpdb->query("CREATE TABLE $mlog (
+            id         BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            queue_id   BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            post_id    BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            action     VARCHAR(50) NOT NULL,
+            note       TEXT,
+            context    LONGTEXT,
+            user_id    BIGINT UNSIGNED NOT NULL DEFAULT 0,
+            created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX (queue_id), INDEX (action), INDEX (created_at)
         ) $c");
     }
 }
