@@ -95,6 +95,15 @@ add_action('admin_init', function() {
         }
         wp_redirect(admin_url('admin.php?page=pa-youtube-sync&tab=playlists&msg=error')); exit;
     }
+    if ($action==='import_all_shorts') {
+        $ch_id = sanitize_text_field($_POST['ch_id']??'');
+        if ($ch_id) {
+            $result = PAYS_Importer::import_channel_shorts($ch_id, 1000);
+            $n = $result['queued'] ?? 0;
+            wp_redirect(admin_url('admin.php?page=pa-youtube-sync&tab=channels&msg=shorts_imported&n='.$n)); exit;
+        }
+        wp_redirect(admin_url('admin.php?page=pa-youtube-sync&tab=channels&msg=error')); exit;
+    }
     if ($action==='reclassify') {
         global $wpdb;
         $q = $wpdb->prefix.'pays_queue';
@@ -130,7 +139,8 @@ function pays_admin_page(): void {
         'synced'       =>['success','همگام‌سازی انجام شد.'],
         'approved'     =>['success','ویدیو منتشر شد.'],
         'rejected'     =>['warning','ویدیو رد شد.'],
-        'reclassified' =>['success','بازطبقه‌بندی انجام شد.'],
+        'reclassified'    =>['success','بازطبقه‌بندی انجام شد.'],
+        'shorts_imported' =>['success', (int)($_GET['n']??0).' شورت به صف اضافه شد.'],
         'queued'       =>['success',(absint($_GET['n']??0)).' ویدیو به صف اضافه شد.'],
     ];
     $tabs=[
@@ -349,6 +359,15 @@ function pays_tab_channels(): void {
             <label>زبان: <select name="lang" style="font-size:12px;"><option value="fa" <?=selected($ch['lang']??'fa','fa',false)?>>FA</option><option value="en" <?=selected($ch['lang']??'fa','en',false)?>>EN</option></select></label>
             <label>حداکثر: <input type="number" name="max_videos" value="<?=(int)($ch['max_videos']??20)?>" min="1" max="50" style="width:55px;"></label>
             <input type="submit" class="button" value="ذخیره">
+        </form>
+        <form method="post" style="margin-top:6px;display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+            <?php wp_nonce_field('pays_action','pays_nonce'); ?>
+            <input type="hidden" name="pays_action" value="import_all_shorts">
+            <input type="hidden" name="ch_id" value="<?=esc_attr($ch['id'])?>">
+            <input type="submit" class="button" value="📥 وارد کردن همه شورت‌ها"
+                onclick="return confirm('همه شورت‌های این کانال (تا ۱۰۰۰ ویدیو) به صف اضافه شوند؟')"
+                style="background:#fef3c7;border-color:#f59e0b;color:#92400e;">
+            <span style="font-size:11px;color:#888;">از Shorts Playlist کانال import می‌شه</span>
         </form>
         <form method="post" style="margin-top:6px;" onsubmit="return confirm('حذف شود؟')">
             <?php wp_nonce_field('pays_action','pays_nonce'); ?>

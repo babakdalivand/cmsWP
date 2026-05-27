@@ -133,6 +133,32 @@ class PAYS_Importer {
         return $stats;
     }
 
+    /* ── Import all shorts from channel's Shorts playlist ──────────── */
+
+    public static function import_channel_shorts( string $channel_id, int $max = 500 ): array {
+        $api_key = get_option('pays_api_key', '');
+        if (!$api_key) return ['error' => 'No API key configured'];
+
+        $api       = new PAYS_API($api_key);
+        $short_ids = $api->get_shorts_ids($channel_id, $max);
+        if (empty($short_ids)) return ['queued'=>0,'skipped'=>0,'total'=>0];
+
+        $queued = 0; $skipped = 0;
+        foreach (array_chunk($short_ids, 50) as $batch) {
+            $details = $api->video_details($batch);
+            foreach ($details as $yt_id => $video) {
+                $iso   = $video['contentDetails']['duration'] ?? 'PT0S';
+                $views = (int)($video['statistics']['viewCount'] ?? 0);
+                if (self::enqueue($yt_id, $channel_id, $video['snippet'], $iso, $views)) {
+                    $queued++;
+                } else {
+                    $skipped++;
+                }
+            }
+        }
+        return ['queued'=>$queued, 'skipped'=>$skipped, 'total'=>count($short_ids)];
+    }
+
     /* ── Full sync across all channels ─────────────────────────────── */
 
     public static function run_sync(): array {

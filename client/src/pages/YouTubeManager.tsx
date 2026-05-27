@@ -96,6 +96,9 @@ function ChannelsTab() {
   const [addMsgType, setAddMsgType] = useState<'ok'|'err'>('ok');
   const [syncMsg, setSyncMsg] = useState('');
   const [syncMsgType, setSyncMsgType] = useState<'ok'|'err'>('ok');
+  const [importMsg, setImportMsg] = useState('');
+  const [importMsgType, setImportMsgType] = useState<'ok'|'err'>('ok');
+  const [importingChId, setImportingChId] = useState<string|null>(null);
 
   const toastCh = (set: (v:string)=>void, setT: (v:'ok'|'err')=>void, msg: string, type: 'ok'|'err') => {
     setT(type); set(msg); setTimeout(() => set(''), 6000);
@@ -126,6 +129,20 @@ function ChannelsTab() {
       toastCh(setSyncMsg, setSyncMsgType, `✅ همگام‌سازی انجام شد — ${total} ویدیو به صف`, 'ok');
     },
     onError: (e: any) => toastCh(setSyncMsg, setSyncMsgType, '❌ ' + errMsg(e), 'err'),
+  });
+
+  const importShorts = useMutation({
+    mutationFn: (chId: string) => {
+      setImportingChId(chId);
+      return api.post(`/youtube/channels/${chId}/import-shorts`).then(r => r.data);
+    },
+    onSuccess: (d) => {
+      setImportingChId(null);
+      qc.invalidateQueries({ queryKey: ['yt', '/queue'] });
+      toastCh(setImportMsg, setImportMsgType,
+        `✅ ${d.queued} شورت به صف اضافه شد (${d.skipped} تکراری)`, 'ok');
+    },
+    onError: (e: any) => { setImportingChId(null); toastCh(setImportMsg, setImportMsgType, '❌ ' + errMsg(e), 'err'); },
   });
 
   return (
@@ -166,6 +183,12 @@ function ChannelsTab() {
         <div className="rounded-lg px-3 py-2 text-xs font-medium"
           style={{ background: syncMsgType==='ok'?'#dcfce7':'#fee2e2', color: syncMsgType==='ok'?'#16a34a':'#dc2626' }}>
           {syncMsg}
+        </div>
+      )}
+      {importMsg && (
+        <div className="rounded-lg px-3 py-2 text-xs font-medium"
+          style={{ background: importMsgType==='ok'?'#dcfce7':'#fee2e2', color: importMsgType==='ok'?'#16a34a':'#dc2626' }}>
+          {importMsg}
         </div>
       )}
 
@@ -209,7 +232,7 @@ function ChannelsTab() {
                   </label>
                 ))}
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mb-2">
                 <select defaultValue={ch.lang} onChange={e => patch.mutate({ id: ch.id, data: { lang: e.target.value } })}
                   className="flex-1 rounded-lg px-2 py-1.5 text-xs" style={{ background: 'var(--bg)', border: '1px solid var(--border)' }}>
                   <option value="fa">FA فارسی</option>
@@ -221,6 +244,14 @@ function ChannelsTab() {
                   <Trash2 size={13} />حذف
                 </button>
               </div>
+              <button
+                onClick={() => importShorts.mutate(ch.id)}
+                disabled={importShorts.isPending}
+                className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold"
+                style={{ background: '#f59e0b20', color: '#d97706', border: '1px solid #f59e0b40' }}>
+                <Smartphone size={13} />
+                {importingChId === ch.id ? '⏳ در حال import...' : '📥 وارد کردن همه شورت‌ها'}
+              </button>
             </div>
           )}
         </div>

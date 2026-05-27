@@ -111,6 +111,13 @@ export async function reclassifyQueue(_req: Request, res: Response) {
   catch (e: any) { res.status(500).json({ error: e.message }); }
 }
 
+export async function importChannelShorts(req: Request, res: Response) {
+  const { id } = req.params;
+  const max = Math.min(parseInt(req.query.max as string || '500'), 2000);
+  try { res.json(await ytApi('POST', `/channels/${id}/import-shorts?max=${max}`)); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+}
+
 export async function getLiveStats(req: Request, res: Response) {
   try {
     const channel_id = req.query.channel_id as string || '';

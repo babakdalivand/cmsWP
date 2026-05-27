@@ -60,6 +60,11 @@ add_action('rest_api_init', function() {
         ['methods'=>'POST', 'callback'=>'pays_rest_reclassify_queue', 'permission_callback'=>$admin],
     ]);
 
+    /* Import all shorts from a channel's Shorts playlist */
+    register_rest_route('pa-yt/v1', '/channels/(?P<id>[^/]+)/import-shorts', [
+        ['methods'=>'POST', 'callback'=>'pays_rest_import_channel_shorts', 'permission_callback'=>$admin],
+    ]);
+
     /* Live channel stats directly from YouTube API */
     register_rest_route('pa-yt/v1', '/youtube/live-stats', [
         ['methods'=>'GET', 'callback'=>'pays_rest_live_stats', 'permission_callback'=>$admin],
@@ -701,6 +706,14 @@ function pays_rest_live_stats( WP_REST_Request $req ): WP_REST_Response {
     $api  = new PAYS_API($api_key);
     $data = $api->live_channel_stats($channel_id);
     return new WP_REST_Response($data, isset($data['error']) ? 400 : 200);
+}
+
+function pays_rest_import_channel_shorts( WP_REST_Request $req ): WP_REST_Response {
+    $ch_id = sanitize_text_field($req->get_param('id'));
+    $max   = min((int)($req->get_param('max') ?: 500), 2000);
+    if (!$ch_id) return new WP_REST_Response(['error'=>'channel id required'], 400);
+    $result = PAYS_Importer::import_channel_shorts($ch_id, $max);
+    return new WP_REST_Response($result, isset($result['error']) ? 400 : 200);
 }
 
 function pays_rest_reclassify_queue(): WP_REST_Response {
