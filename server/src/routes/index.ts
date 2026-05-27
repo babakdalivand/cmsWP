@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import sharp from 'sharp';
 import { authMiddleware, requireAdmin } from '../middleware/auth';
-import { login, getMe, refreshTokens, logout } from '../auth/authController';
+import { login, getMe, refreshTokens, logout, loginWithTelegram } from '../auth/authController';
 import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey, listOpenRouterModels } from '../ai/aiController';
 import {
   listContent, getContent, createContent, updateContent,
@@ -18,8 +18,16 @@ import {
   listQueue, approveVideo, rejectVideo,
   listPlaylists, importPlaylist,
   getAnalytics, runSync, getSettings, saveSettings,
+  getAdvancedAnalytics, getAnalyticsTrends, getAnalyticsBestTimes,
+  getAnalyticsReport, triggerAnalyticsSnapshot,
 } from '../youtube/ytController';
 import { query } from '../db/pool';
+import {
+  getLevels, getPlans, checkPostAccess, getMySubscription, getAccessToken,
+  startPayment, adminListSubscriptions, adminGrantSubscription,
+  adminCancelSubscription, adminGetStats, adminSetPostLevel,
+  adminRunExpire, adminGetTransactions,
+} from '../membership/membershipController';
 
 const router = Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -28,10 +36,11 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 
 router.post('/telegram/webhook', handleWebhook);
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
-router.post('/auth/login',   login);
-router.post('/auth/refresh', refreshTokens);
-router.post('/auth/logout',  authMiddleware, logout);
-router.get('/auth/me',       authMiddleware, getMe);
+router.post('/auth/login',    login);
+router.post('/auth/telegram', loginWithTelegram);
+router.post('/auth/refresh',  refreshTokens);
+router.post('/auth/logout',   authMiddleware, logout);
+router.get('/auth/me',        authMiddleware, getMe);
 
 // ── AI (sync) ──────────────────────────────────────────────────────────────────
 router.post('/ai/generate',         authMiddleware, generate);
@@ -228,8 +237,28 @@ router.post  ('/youtube/queue/:id/reject',           authMiddleware, requireAdmi
 router.get   ('/youtube/channels/:id/playlists',     authMiddleware, requireAdmin, listPlaylists);
 router.post  ('/youtube/playlists/:pl_id/import',    authMiddleware, requireAdmin, importPlaylist);
 router.get   ('/youtube/analytics',                  authMiddleware, requireAdmin, getAnalytics);
+router.get   ('/youtube/analytics/advanced',         authMiddleware, requireAdmin, getAdvancedAnalytics);
+router.get   ('/youtube/analytics/trends',           authMiddleware, requireAdmin, getAnalyticsTrends);
+router.get   ('/youtube/analytics/best-times',       authMiddleware, requireAdmin, getAnalyticsBestTimes);
+router.get   ('/youtube/analytics/report',           authMiddleware, requireAdmin, getAnalyticsReport);
+router.post  ('/youtube/analytics/snapshot',         authMiddleware, requireAdmin, triggerAnalyticsSnapshot);
 router.post  ('/youtube/sync',                       authMiddleware, requireAdmin, runSync);
 router.get   ('/youtube/settings',                   authMiddleware, requireAdmin, getSettings);
 router.patch ('/youtube/settings',                   authMiddleware, requireAdmin, saveSettings);
+
+// ── Membership ────────────────────────────────────────────────────────────────
+router.get   ('/membership/levels',                       getLevels);
+router.get   ('/membership/plans',                        getPlans);
+router.get   ('/membership/check/:post_id',               checkPostAccess);
+router.get   ('/membership/my',                           authMiddleware, getMySubscription);
+router.post  ('/membership/token',                        authMiddleware, getAccessToken);
+router.post  ('/membership/pay/start',                    authMiddleware, startPayment);
+router.get   ('/membership/admin/subscriptions',          authMiddleware, requireAdmin, adminListSubscriptions);
+router.post  ('/membership/admin/grant',                  authMiddleware, requireAdmin, adminGrantSubscription);
+router.post  ('/membership/admin/cancel/:user_id',        authMiddleware, requireAdmin, adminCancelSubscription);
+router.get   ('/membership/admin/stats',                  authMiddleware, requireAdmin, adminGetStats);
+router.patch ('/membership/admin/post/:post_id/level',    authMiddleware, requireAdmin, adminSetPostLevel);
+router.post  ('/membership/admin/expire',                 authMiddleware, requireAdmin, adminRunExpire);
+router.get   ('/membership/admin/transactions',           authMiddleware, requireAdmin, adminGetTransactions);
 
 export default router;

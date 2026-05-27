@@ -1,24 +1,38 @@
 import { useNavigate, useLocation } from 'react-router-dom';
-import { LayoutDashboard, FileText, Image, Sparkles, Activity, Youtube } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { LayoutDashboard, FileText, Sparkles, Crown, Youtube } from 'lucide-react';
+import { api } from '../../api/client';
 
 interface Tab {
   path: string;
   icon: React.ComponentType<any>;
   label: string;
   match?: string[];
+  badge?: number;
 }
 
-const TABS: Tab[] = [
-  { path: '/',          icon: LayoutDashboard, label: 'داشبورد' },
-  { path: '/wp-posts',  icon: FileText,        label: 'محتوا', match: ['/wp-posts', '/wp-edit', '/content'] },
-  { path: '/create',    icon: Sparkles,        label: 'ایجاد' },
-  { path: '/youtube',   icon: Youtube,         label: 'یوتیوب' },
-  { path: '/monitoring',icon: Activity,        label: 'نظارت' },
-];
+function usePendingCount() {
+  const { data } = useQuery({
+    queryKey: ['yt', '/queue', { status: 'pending', limit: 1 }],
+    queryFn:  () => api.get('/youtube/queue', { params: { status: 'pending', limit: 1 } }).then(r => r.data),
+    staleTime: 30000,
+    refetchInterval: 30000,
+  });
+  return (data?.total as number) || 0;
+}
 
 export default function BottomNav() {
   const navigate  = useNavigate();
   const { pathname } = useLocation();
+  const pendingCount = usePendingCount();
+
+  const TABS: Tab[] = [
+    { path: '/',          icon: LayoutDashboard, label: 'داشبورد' },
+    { path: '/wp-posts',  icon: FileText,        label: 'محتوا', match: ['/wp-posts', '/wp-edit', '/content'] },
+    { path: '/create',    icon: Sparkles,        label: 'ایجاد' },
+    { path: '/youtube',    icon: Youtube,  label: 'یوتیوب', badge: pendingCount },
+    { path: '/membership', icon: Crown,    label: 'اشتراک' },
+  ];
 
   return (
     <nav
@@ -32,7 +46,7 @@ export default function BottomNav() {
       }}
     >
       <div className="flex items-center justify-around py-2 px-1 max-w-lg mx-auto">
-        {TABS.map(({ path, icon: Icon, label, match }) => {
+        {TABS.map(({ path, icon: Icon, label, match, badge }) => {
           const isCreate = path === '/create';
           const active = match
             ? match.some(m => pathname.startsWith(m))
@@ -66,10 +80,20 @@ export default function BottomNav() {
             <button
               key={path}
               onClick={() => navigate(path)}
-              className="flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors"
+              className="relative flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors"
               style={{ color: active ? 'var(--primary)' : 'var(--label)' }}
             >
-              <Icon size={22} strokeWidth={active ? 2.4 : 1.8} />
+              <div className="relative">
+                <Icon size={22} strokeWidth={active ? 2.4 : 1.8} />
+                {badge != null && badge > 0 && (
+                  <span
+                    className="absolute -top-1.5 -right-1.5 min-w-[16px] h-4 rounded-full text-[9px] font-bold flex items-center justify-center px-0.5"
+                    style={{ background: '#ef4444', color: '#fff' }}
+                  >
+                    {badge > 99 ? '99+' : badge}
+                  </span>
+                )}
+              </div>
               <span className="text-[10px] font-medium">{label}</span>
             </button>
           );

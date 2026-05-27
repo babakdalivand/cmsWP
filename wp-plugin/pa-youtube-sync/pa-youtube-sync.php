@@ -33,6 +33,10 @@ require_once PAYS_DIR . 'inc/toxicity.php';
 require_once PAYS_DIR . 'inc/notification.php';
 require_once PAYS_DIR . 'inc/rule-engine.php';
 require_once PAYS_DIR . 'inc/moderation.php';
+require_once PAYS_DIR . 'inc/analytics.php';
+require_once PAYS_DIR . 'inc/membership.php';
+require_once PAYS_DIR . 'inc/payment.php';
+require_once PAYS_DIR . 'inc/member-rest-api.php';
 require_once PAYS_DIR . 'inc/rest-api.php';
 require_once PAYS_DIR . 'inc/admin.php';
 require_once PAYS_DIR . 'inc/ai-admin.php';
@@ -187,6 +191,81 @@ function pays_create_tables(): void {
             user_id    BIGINT UNSIGNED NOT NULL DEFAULT 0,
             created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
             INDEX (queue_id), INDEX (action), INDEX (created_at)
+        ) $c");
+    }
+
+    // Analytics snapshots
+    $snap = $wpdb->prefix . 'pays_analytics_snap';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$snap'") !== $snap ) {
+        $wpdb->query("CREATE TABLE $snap (
+            id           BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            yt_id        VARCHAR(64) NOT NULL,
+            channel_id   VARCHAR(64) NOT NULL,
+            type         VARCHAR(16) NOT NULL DEFAULT 'video',
+            duration_sec INT DEFAULT 0,
+            published_at DATETIME,
+            post_id      BIGINT UNSIGNED DEFAULT NULL,
+            views        BIGINT UNSIGNED DEFAULT 0,
+            likes        BIGINT UNSIGNED DEFAULT 0,
+            comments     BIGINT UNSIGNED DEFAULT 0,
+            snapped_at   DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            INDEX (yt_id), INDEX (channel_id), INDEX (snapped_at), INDEX (type)
+        ) $c");
+    }
+
+    // Membership subscriptions
+    $subs = $wpdb->prefix . 'pays_subscriptions';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$subs'") !== $subs ) {
+        $wpdb->query("CREATE TABLE $subs (
+            id               BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id          BIGINT UNSIGNED NOT NULL,
+            access_level     VARCHAR(20)  NOT NULL DEFAULT 'basic',
+            level_priority   TINYINT UNSIGNED NOT NULL DEFAULT 10,
+            status           VARCHAR(20)  NOT NULL DEFAULT 'active',
+            plan_id          VARCHAR(100) DEFAULT NULL,
+            gateway          VARCHAR(30)  NOT NULL DEFAULT 'manual',
+            gateway_sub_id   VARCHAR(200) DEFAULT NULL,
+            amount           DECIMAL(10,2) NOT NULL DEFAULT 0,
+            currency         VARCHAR(10)  NOT NULL DEFAULT 'IRR',
+            started_at       DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            expires_at       DATETIME DEFAULT NULL,
+            cancelled_at     DATETIME DEFAULT NULL,
+            cancel_reason    VARCHAR(200) DEFAULT NULL,
+            telegram_synced  TINYINT(1) NOT NULL DEFAULT 0,
+            INDEX (user_id), INDEX (status), INDEX (expires_at), INDEX (access_level)
+        ) $c");
+    }
+
+    // Payment transactions
+    $txns = $wpdb->prefix . 'pays_payment_transactions';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$txns'") !== $txns ) {
+        $wpdb->query("CREATE TABLE $txns (
+            id            BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id       BIGINT UNSIGNED NOT NULL,
+            gateway       VARCHAR(30)  NOT NULL,
+            order_id      VARCHAR(100) NOT NULL UNIQUE,
+            amount        DECIMAL(10,2) NOT NULL,
+            currency      VARCHAR(10)  NOT NULL DEFAULT 'IRR',
+            level         VARCHAR(20)  NOT NULL DEFAULT 'basic',
+            duration_days INT NOT NULL DEFAULT 30,
+            status        VARCHAR(20)  NOT NULL DEFAULT 'pending',
+            gateway_ref   VARCHAR(200) DEFAULT NULL,
+            ref_id        VARCHAR(200) DEFAULT NULL,
+            created_at    DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            completed_at  DATETIME DEFAULT NULL,
+            INDEX (user_id), INDEX (status), INDEX (order_id)
+        ) $c");
+    }
+
+    // Access tokens (short-lived, for API clients)
+    $tokens = $wpdb->prefix . 'pays_access_tokens';
+    if ( $wpdb->get_var("SHOW TABLES LIKE '$tokens'") !== $tokens ) {
+        $wpdb->query("CREATE TABLE $tokens (
+            id          BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+            user_id     BIGINT UNSIGNED NOT NULL,
+            token_hash  VARCHAR(64) NOT NULL UNIQUE,
+            expires_at  DATETIME NOT NULL,
+            INDEX (user_id), INDEX (token_hash), INDEX (expires_at)
         ) $c");
     }
 }

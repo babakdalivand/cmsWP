@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Eye, EyeOff, Fingerprint, Globe } from 'lucide-react';
+import { Eye, EyeOff, Globe } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
@@ -11,6 +11,20 @@ export default function Login() {
   const [show, setShow] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+
+  // Try Telegram WebApp auto-login on mount
+  useEffect(() => {
+    const tg = (window as any).Telegram?.WebApp;
+    if (!tg?.initData) return;
+
+    setLoading(true);
+    api.post('/auth/telegram', { initData: tg.initData })
+      .then(({ data }) => {
+        login(data.token, data.refreshToken, data.user);
+        navigate('/');
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -27,9 +41,17 @@ export default function Login() {
     }
   }
 
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-bg flex flex-col items-center justify-center gap-4">
+        <div className="w-10 h-10 rounded-full border-2 border-blue border-t-transparent animate-spin" />
+        <p className="text-label text-sm">در حال ورود...</p>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-bg flex flex-col items-center justify-center px-6" dir="ltr">
-      {/* WP Logo */}
       <div className="mb-10 flex flex-col items-center gap-3">
         <div className="w-20 h-20 rounded-2xl bg-surface border border-border flex items-center justify-center shadow-lg shadow-blue/10">
           <Globe size={44} className="text-blue" strokeWidth={1.5} />
@@ -38,7 +60,6 @@ export default function Login() {
         <p className="text-label text-sm">مدیریت محتوای وردپرس</p>
       </div>
 
-      {/* Form */}
       <form onSubmit={handleSubmit} className="w-full max-w-sm flex flex-col gap-4">
         {error && (
           <div className="bg-danger/10 border border-danger/30 text-danger text-sm rounded-xl px-4 py-3 text-center">
@@ -80,21 +101,7 @@ export default function Login() {
           disabled={loading}
           className="w-full bg-blue hover:bg-blue-hover disabled:opacity-50 text-white font-bold py-4 rounded-xl transition-colors"
         >
-          {loading ? 'در حال ورود...' : 'ورود به وردپرس'}
-        </button>
-
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-border" />
-          <span className="text-label text-xs">یا</span>
-          <div className="flex-1 h-px bg-border" />
-        </div>
-
-        <button
-          type="button"
-          className="w-full bg-surface border border-border text-label py-4 rounded-xl flex items-center justify-center gap-2 hover:border-blue/50 transition-colors"
-        >
-          <Fingerprint size={20} />
-          <span>ورود بیومتریک</span>
+          ورود به وردپرس
         </button>
       </form>
     </div>

@@ -100,3 +100,40 @@ export async function saveSettings(req: Request, res: Response) {
   try { res.json(await ytApi('PATCH', '/settings', req.body)); }
   catch (e: any) { res.status(500).json({ error: e.message }); }
 }
+
+export async function getAdvancedAnalytics(req: Request, res: Response) {
+  try {
+    const { channel_id = '' } = req.query;
+    const qs = channel_id ? `?channel_id=${encodeURIComponent(String(channel_id))}` : '';
+    res.json(await ytApi('GET', `/analytics/advanced${qs}`));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+}
+
+export async function getAnalyticsTrends(req: Request, res: Response) {
+  try {
+    const { channel_id = '', days = 30 } = req.query;
+    const qs = new URLSearchParams({ ...(channel_id ? { channel_id: String(channel_id) } : {}), days: String(days) });
+    res.json(await ytApi('GET', `/analytics/trends?${qs}`));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+}
+
+export async function getAnalyticsBestTimes(req: Request, res: Response) {
+  try {
+    const { channel_id = '' } = req.query;
+    const qs = channel_id ? `?channel_id=${encodeURIComponent(String(channel_id))}` : '';
+    res.json(await ytApi('GET', `/analytics/best-times${qs}`));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+}
+
+export async function getAnalyticsReport(req: Request, res: Response) {
+  try {
+    const { channel_id = '' } = req.query;
+    const qs = channel_id ? `?channel_id=${encodeURIComponent(String(channel_id))}` : '';
+    res.json(await ytApi('GET', `/analytics/report${qs}`));
+  } catch (e: any) { res.status(500).json({ error: e.message }); }
+}
+
+export async function triggerAnalyticsSnapshot(_req: Request, res: Response) {
+  try { res.json(await ytApi('POST', '/analytics/snapshot')); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+}

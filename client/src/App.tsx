@@ -12,6 +12,7 @@ import WPEditPost   from './pages/WPEditPost';
 import Categories   from './pages/Categories';
 import Comments       from './pages/Comments';
 import YouTubeManager from './pages/YouTubeManager';
+import Membership    from './pages/Membership';
 import BottomNav    from './components/layout/BottomNav';
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -40,7 +41,8 @@ export default function App() {
         <Route path="/settings" element={<ProtectedLayout><ApiSettings /></ProtectedLayout>} />
         <Route path="/media" element={<ProtectedLayout><MediaLibrary /></ProtectedLayout>} />
         <Route path="/monitoring" element={<ProtectedLayout><Monitoring /></ProtectedLayout>} />
-        <Route path="/youtube"    element={<ProtectedLayout><YouTubeManager /></ProtectedLayout>} />
+        <Route path="/youtube"     element={<ProtectedLayout><YouTubeManager /></ProtectedLayout>} />
+        <Route path="/membership"  element={<ProtectedLayout><Membership /></ProtectedLayout>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

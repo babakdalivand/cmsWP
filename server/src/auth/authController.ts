@@ -1,5 +1,5 @@
 import { Request, Response } from 'express';
-import { randomUUID, createHash } from 'crypto';
+import { randomUUID, createHash, createHmac } from 'crypto';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import { query, queryOne, queryInsert } from '../db/pool';
@@ -226,6 +226,82 @@ export async function logout(req: Request, res: Response) {
 
   await dbLog('info', 'auth', 'Logout', { userId: (req as any).user?.userId });
   return res.json({ message: 'خروج موفق' });
+}
+
+export async function loginWithTelegram(req: Request, res: Response) {
+  const { initData } = req.body;
+  if (!initData) return res.status(400).json({ error: 'initData الزامی است' });
+
+  const botToken = config.telegram.botToken;
+  if (!botToken) return res.status(503).json({ error: 'بات توکن تنظیم نشده' });
+
+  // Validate HMAC per Telegram Mini App spec
+  const params = new URLSearchParams(initData);
+  const hash   = params.get('hash') || '';
+  params.delete('hash');
+
+  const dataCheckString = [...params.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v}`)
+    .join('\n');
+
+  const secretKey = createHmac('sha256', 'WebAppData').update(botToken).digest();
+  const expected  = createHmac('sha256', secretKey).update(dataCheckString).digest('hex');
+
+  if (expected !== hash) return res.status(401).json({ error: 'امضای تلگرام نامعتبر است' });
+
+  // Auth_date must be recent (within 24 h)
+  const authDate = parseInt(params.get('auth_date') || '0');
+  if (Date.now() / 1000 - authDate > 86400) {
+    return res.status(401).json({ error: 'توکن تلگرام منقضی شده' });
+  }
+
+  const tgUser = JSON.parse(params.get('user') || '{}');
+  if (!tgUser.id) return res.status(400).json({ error: 'اطلاعات کاربر تلگرام ناقص است' });
+
+  // Look up by telegram_id or create a restricted viewer account
+  let row = await queryOne<{ id: number; username: string; role: string; display_name: string; email: string; avatar_url: string | null }>(
+    'SELECT id, username, role, display_name, email, avatar_url FROM users WHERE telegram_chat_id = ?',
+    [tgUser.id]
+  );
+
+  if (!row) {
+    const uname = tgUser.username || `tg_${tgUser.id}`;
+    const byUsername = await queryOne<{ id: number; username: string; role: string; display_name: string; email: string; avatar_url: string | null }>(
+      'SELECT id, username, role, display_name, email, avatar_url FROM users WHERE username = ?',
+      [uname]
+    );
+
+    if (byUsername) {
+      await query('UPDATE users SET telegram_chat_id=? WHERE id=?', [tgUser.id, byUsername.id]);
+      row = byUsername;
+    } else {
+      const newId = await queryInsert(
+        'INSERT INTO users (wp_user_id, username, display_name, email, role, telegram_chat_id) VALUES (0,?,?,?,?,?)',
+        [uname, `${tgUser.first_name} ${tgUser.last_name || ''}`.trim(), '', 'editor', tgUser.id]
+      );
+      row = { id: newId, username: uname, role: 'editor', display_name: tgUser.first_name, email: '', avatar_url: null };
+    }
+  }
+
+  const accessToken  = signAccessToken(row.id, 0, row.username, row.role);
+  const refreshToken = await issueRefreshToken(row.id, req);
+
+  await dbLog('info', 'auth', 'Telegram login', { telegramId: tgUser.id, username: row.username });
+
+  return res.json({
+    token: accessToken,
+    refreshToken,
+    user: {
+      id:          row.id,
+      wpUserId:    0,
+      username:    row.username,
+      displayName: row.display_name,
+      email:       row.email,
+      role:        row.role,
+      avatarUrl:   row.avatar_url,
+    },
+  });
 }
 
 export async function getMe(req: Request, res: Response) {

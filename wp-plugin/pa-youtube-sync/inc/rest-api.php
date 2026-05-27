@@ -1,4 +1,4 @@
-<?php
+﻿<?php
 if ( ! defined('ABSPATH') ) exit;
 
 /**
@@ -56,7 +56,7 @@ add_action('rest_api_init', function() {
     ]);
 });
 
-/* ── Channels ──────────────────────────────────────────────────────── */
+/* â”€â”€ Channels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function pays_rest_list_channels(): WP_REST_Response {
     return new WP_REST_Response(get_option('pays_channels', []), 200);
@@ -118,7 +118,7 @@ function pays_rest_delete_channel( WP_REST_Request $req ): WP_REST_Response {
     return new WP_REST_Response(null, 204);
 }
 
-/* ── Queue ─────────────────────────────────────────────────────────── */
+/* â”€â”€ Queue â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function pays_rest_list_queue( WP_REST_Request $req ): WP_REST_Response {
     global $wpdb;
@@ -153,7 +153,7 @@ function pays_rest_reject( WP_REST_Request $req ): WP_REST_Response {
     return $ok ? new WP_REST_Response(null, 204) : new WP_REST_Response(['error'=>'Not found'], 404);
 }
 
-/* ── Playlists ─────────────────────────────────────────────────────── */
+/* â”€â”€ Playlists â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function pays_rest_playlists( WP_REST_Request $req ): WP_REST_Response {
     $api_key = get_option('pays_api_key', '');
@@ -184,7 +184,7 @@ function pays_rest_import_playlist( WP_REST_Request $req ): WP_REST_Response {
     return new WP_REST_Response(['queued'=>$queued], 200);
 }
 
-/* ── Analytics ─────────────────────────────────────────────────────── */
+/* â”€â”€ Analytics â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function pays_rest_analytics( WP_REST_Request $req ): WP_REST_Response {
     global $wpdb;
@@ -225,14 +225,14 @@ function pays_rest_analytics( WP_REST_Request $req ): WP_REST_Response {
     return new WP_REST_Response($out, 200);
 }
 
-/* ── Sync ──────────────────────────────────────────────────────────── */
+/* â”€â”€ Sync â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function pays_rest_sync(): WP_REST_Response {
     $results = PAYS_Importer::run_sync();
     return new WP_REST_Response(['results'=>$results,'synced_at'=>current_time('mysql')], 200);
 }
 
-/* ── Settings ──────────────────────────────────────────────────────── */
+/* â”€â”€ Settings â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 function pays_rest_get_settings(): WP_REST_Response {
     return new WP_REST_Response([
@@ -263,7 +263,7 @@ function pays_rest_set_settings( WP_REST_Request $req ): WP_REST_Response {
     return pays_rest_get_settings();
 }
 
-/* ── AI SEO ─────────────────────────────────────────────────────────── */
+/* â”€â”€ AI SEO â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 add_action( 'rest_api_init', function () {
     $admin = fn() => current_user_can('manage_options');
@@ -346,7 +346,7 @@ function pays_rest_apply_ai( WP_REST_Request $req ): WP_REST_Response {
     return new WP_REST_Response( [ 'applied' => true, 'post_id' => $post_id ], 200 );
 }
 
-/* ── Video-to-Article ────────────────────────────────────────────────── */
+/* â”€â”€ Video-to-Article â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 add_action( 'rest_api_init', function () {
     $admin = fn() => current_user_can('manage_options');
@@ -446,7 +446,7 @@ function pays_rest_publish_article( WP_REST_Request $req ): WP_REST_Response {
         : new WP_REST_Response( [ 'published' => true, 'url' => get_permalink( $post_id ) ], 200 );
 }
 
-/* ── Smart Moderation ────────────────────────────────────────────────── */
+/* â”€â”€ Smart Moderation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
 
 add_action( 'rest_api_init', function () {
     $admin = fn() => current_user_can('manage_options');
@@ -483,6 +483,23 @@ add_action( 'rest_api_init', function () {
     // Toxicity check
     register_rest_route('pa-yt/v1', '/toxicity/check', [
         [ 'methods' => 'POST', 'callback' => 'pays_rest_toxicity_check', 'permission_callback' => $admin ],
+    ]);
+
+    // Analytics
+    register_rest_route('pa-yt/v1', '/analytics/advanced', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_analytics_advanced', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/analytics/trends', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_analytics_trends', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/analytics/best-times', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_analytics_best_times', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/analytics/report', [
+        [ 'methods' => 'GET', 'callback' => 'pays_rest_analytics_report', 'permission_callback' => $admin ],
+    ]);
+    register_rest_route('pa-yt/v1', '/analytics/snapshot', [
+        [ 'methods' => 'POST', 'callback' => 'pays_rest_analytics_snapshot', 'permission_callback' => $admin ],
     ]);
 });
 
@@ -582,4 +599,43 @@ function pays_rest_list_series(): WP_REST_Response {
     ], $terms );
 
     return new WP_REST_Response( $out, 200 );
+}
+
+function pays_rest_analytics_advanced( WP_REST_Request $req ): WP_REST_Response {
+    $a   = new PAYS_Analytics();
+    $ch  = sanitize_text_field( $req->get_param('channel_id') ?? '' );
+
+    return new WP_REST_Response([
+        'summary'    => $a->get_engagement_summary($ch),
+        'comparison' => $a->get_format_comparison($ch),
+        'top'        => $a->get_top_performers($ch, 10),
+        'playlists'  => $a->get_playlist_performance(),
+        'growth'     => $a->get_growth_prediction($ch),
+    ], 200);
+}
+
+function pays_rest_analytics_trends( WP_REST_Request $req ): WP_REST_Response {
+    $a    = new PAYS_Analytics();
+    $ch   = sanitize_text_field( $req->get_param('channel_id') ?? '' );
+    $days = intval( $req->get_param('days') ?? 30 );
+    $days = max(7, min(90, $days));
+    return new WP_REST_Response( $a->get_channel_trends($ch, $days), 200 );
+}
+
+function pays_rest_analytics_best_times( WP_REST_Request $req ): WP_REST_Response {
+    $a  = new PAYS_Analytics();
+    $ch = sanitize_text_field( $req->get_param('channel_id') ?? '' );
+    return new WP_REST_Response( $a->get_best_upload_times($ch), 200 );
+}
+
+function pays_rest_analytics_report( WP_REST_Request $req ): WP_REST_Response {
+    $a  = new PAYS_Analytics();
+    $ch = sanitize_text_field( $req->get_param('channel_id') ?? '' );
+    return new WP_REST_Response( $a->get_weekly_report($ch), 200 );
+}
+
+function pays_rest_analytics_snapshot(): WP_REST_Response {
+    $a     = new PAYS_Analytics();
+    $saved = $a->snapshot_all();
+    return new WP_REST_Response( [ 'saved' => $saved ], 200 );
 }
