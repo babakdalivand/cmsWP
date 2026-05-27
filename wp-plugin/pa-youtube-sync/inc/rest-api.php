@@ -54,6 +54,11 @@ add_action('rest_api_init', function() {
         ['methods'=>'GET',   'callback'=>'pays_rest_get_settings', 'permission_callback'=>$admin],
         ['methods'=>'PATCH', 'callback'=>'pays_rest_set_settings', 'permission_callback'=>$admin],
     ]);
+
+    /* Reclassify queue items as short/video based on updated logic */
+    register_rest_route('pa-yt/v1', '/queue/reclassify', [
+        ['methods'=>'POST', 'callback'=>'pays_rest_reclassify_queue', 'permission_callback'=>$admin],
+    ]);
 });
 
 /* â”€â”€ Channels â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
@@ -638,4 +643,27 @@ function pays_rest_analytics_snapshot(): WP_REST_Response {
     $a     = new PAYS_Analytics();
     $saved = $a->snapshot_all();
     return new WP_REST_Response( [ 'saved' => $saved ], 200 );
+}
+
+function pays_rest_reclassify_queue(): WP_REST_Response {
+    global $wpdb;
+    $q = $wpdb->prefix . 'pays_queue';
+
+    $rows = $wpdb->get_results( "SELECT id, duration_sec, title, description FROM $q WHERE status='pending'", ARRAY_A );
+    $updated = 0;
+
+    foreach ( $rows as $row ) {
+        $iso      = 'PT' . (int)$row['duration_sec'] . 'S';
+        $is_short = PAYS_API::is_short( $iso, $row['title'], $row['description'] );
+        $new_type = $is_short ? 'short' : 'video';
+
+        $wpdb->update( $q, ['type' => $new_type], ['id' => $row['id']] );
+        if ( $is_short ) $updated++;
+    }
+
+    return new WP_REST_Response( [
+        'total'  => count($rows),
+        'shorts' => $updated,
+        'videos' => count($rows) - $updated,
+    ], 200 );
 }

@@ -1184,6 +1184,14 @@ function SettingsTab() {
     onSuccess: () => alert('✅ همگام‌سازی انجام شد'),
   });
 
+  const reclassify = useMutation({
+    mutationFn: () => api.post('/youtube/queue/reclassify').then(r => r.data),
+    onSuccess: (d) => {
+      qc.invalidateQueries({ queryKey: ['yt'] });
+      alert(`✅ بازطبقه‌بندی انجام شد\nشورت: ${d.shorts} | ویدیو: ${d.videos}`);
+    },
+  });
+
   const changeRole = useMutation({
     mutationFn: ({ id, role }: { id: number; role: string }) => api.patch(`/users/${id}/role`, { role }).then(r => r.data),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
@@ -1254,6 +1262,13 @@ function SettingsTab() {
             style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}>
             <RefreshCw size={16} className={sync.isPending ? 'animate-spin' : ''} />
             {sync.isPending ? 'در حال همگام‌سازی...' : 'همگام‌سازی دستی'}
+          </button>
+
+          <button onClick={() => reclassify.mutate()} disabled={reclassify.isPending}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
+            style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--primary)' }}>
+            <Smartphone size={16} className={reclassify.isPending ? 'animate-spin' : ''} />
+            {reclassify.isPending ? 'در حال بازطبقه‌بندی...' : 'بازطبقه‌بندی شورت‌ها'}
           </button>
         </>
       )}

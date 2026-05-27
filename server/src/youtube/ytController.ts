@@ -101,6 +101,11 @@ export async function saveSettings(req: Request, res: Response) {
   catch (e: any) { res.status(500).json({ error: e.message }); }
 }
 
+export async function reclassifyQueue(_req: Request, res: Response) {
+  try { res.json(await ytApi('POST', '/queue/reclassify')); }
+  catch (e: any) { res.status(500).json({ error: e.message }); }
+}
+
 export async function getAdvancedAnalytics(req: Request, res: Response) {
   try {
     const { channel_id = '' } = req.query;
