@@ -5,14 +5,23 @@ namespace CMM\Adapters;
 class GoogleDriveAdapter implements AdapterInterface {
     private ?string $accessToken  = null;
     private int     $tokenExpires = 0;
+    private array   $folderCache  = [];   // path => folder_id
 
     public function __construct(private readonly array $creds) {}
 
     public function upload(string $localPath, string $remotePath, string $mimeType): string {
         $token    = $this->getAccessToken();
+        $parts    = explode('/', ltrim($remotePath, '/'));
+        $filename = array_pop($parts);
+
+        // زیرپوشه‌ها را بساز (اگر وجود نداشت)
+        $parentId = $this->creds['folder_id'];
+        if (!empty($parts)) {
+            $parentId = $this->ensureFolderPath($parts, $parentId, $token);
+        }
+
         $body     = file_get_contents($localPath);
-        $filename = basename($remotePath);
-        $meta     = json_encode(['name' => $filename, 'parents' => [$this->creds['folder_id']]]);
+        $meta     = json_encode(['name' => $filename, 'parents' => [$parentId]]);
         $boundary = 'cmm_gdrive_' . wp_generate_uuid4();
 
         $multipart  = "--$boundary\r\n";
@@ -68,12 +77,68 @@ class GoogleDriveAdapter implements AdapterInterface {
     }
 
     public function ping(): bool {
-        try {
-            $this->getAccessToken();
-            return true;
-        } catch (\Throwable) {
-            return false;
+        try { $this->getAccessToken(); return true; }
+        catch (\Throwable) { return false; }
+    }
+
+    // ── ساخت زیرپوشه به صورت تودرتو ────────────────────────────────────────────
+    private function ensureFolderPath(array $segments, string $rootId, string $token): string {
+        $currentId  = $rootId;
+        $cacheKey   = '';
+
+        foreach ($segments as $seg) {
+            $cacheKey .= '/' . $seg;
+
+            if (isset($this->folderCache[$cacheKey])) {
+                $currentId = $this->folderCache[$cacheKey];
+                continue;
+            }
+
+            // جستجو در Drive
+            $existing = $this->findFolder($seg, $currentId, $token);
+            if ($existing) {
+                $this->folderCache[$cacheKey] = $existing;
+                $currentId = $existing;
+            } else {
+                $newId = $this->createFolder($seg, $currentId, $token);
+                $this->folderCache[$cacheKey] = $newId;
+                $currentId = $newId;
+            }
         }
+
+        return $currentId;
+    }
+
+    private function findFolder(string $name, string $parentId, string $token): ?string {
+        $q   = urlencode("name='$name' and mimeType='application/vnd.google-apps.folder' and '$parentId' in parents and trashed=false");
+        $res = wp_remote_get(
+            "https://www.googleapis.com/drive/v3/files?q=$q&fields=files(id)&pageSize=1",
+            ['headers' => ['Authorization' => "Bearer $token"], 'timeout' => 15]
+        );
+        if (is_wp_error($res)) return null;
+        $data = json_decode(wp_remote_retrieve_body($res), true);
+        return $data['files'][0]['id'] ?? null;
+    }
+
+    private function createFolder(string $name, string $parentId, string $token): string {
+        $res = wp_remote_post(
+            'https://www.googleapis.com/drive/v3/files',
+            [
+                'headers' => [
+                    'Authorization' => "Bearer $token",
+                    'Content-Type'  => 'application/json',
+                ],
+                'body'    => json_encode([
+                    'name'     => $name,
+                    'mimeType' => 'application/vnd.google-apps.folder',
+                    'parents'  => [$parentId],
+                ]),
+                'timeout' => 15,
+            ]
+        );
+        $this->assertOk($res, "GDrive createFolder($name)");
+        $data = json_decode(wp_remote_retrieve_body($res), true);
+        return $data['id'];
     }
 
     private function makeFilePublic(string $fileId, string $token): void {
@@ -94,28 +159,22 @@ class GoogleDriveAdapter implements AdapterInterface {
         if ($this->accessToken && time() < $this->tokenExpires - 60) {
             return $this->accessToken;
         }
-        $now    = time();
-        $claim  = base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT']));
-        $payload = base64_encode(json_encode([
+        $now     = time();
+        $claim   = strtr(base64_encode(json_encode(['alg' => 'RS256', 'typ' => 'JWT'])), '+/', '-_');
+        $payload = strtr(base64_encode(json_encode([
             'iss'   => $this->creds['client_email'],
             'scope' => 'https://www.googleapis.com/auth/drive',
             'aud'   => 'https://oauth2.googleapis.com/token',
             'iat'   => $now,
             'exp'   => $now + 3600,
-        ]));
-        $claim   = strtr($claim, '+/', '-_');
-        $payload = strtr($payload, '+/', '-_');
+        ])), '+/', '-_');
 
         $privateKey = $this->creds['private_key'];
         openssl_sign("$claim.$payload", $sig, $privateKey, OPENSSL_ALGO_SHA256);
-        $sigB64 = strtr(base64_encode($sig), '+/', '-_');
-        $jwt    = "$claim.$payload.$sigB64";
+        $jwt = "$claim.$payload." . strtr(base64_encode($sig), '+/', '-_');
 
         $response = wp_remote_post('https://oauth2.googleapis.com/token', [
-            'body' => [
-                'grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer',
-                'assertion'  => $jwt,
-            ],
+            'body'    => ['grant_type' => 'urn:ietf:params:oauth:grant-type:jwt-bearer', 'assertion' => $jwt],
             'timeout' => 15,
         ]);
         $this->assertOk($response, 'GDrive token');
