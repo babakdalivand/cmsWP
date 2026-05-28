@@ -65,11 +65,38 @@ export default function CreateContent() {
   const featuredInputRef = useRef<HTMLInputElement>(null);
   const mediaInputRef    = useRef<HTMLInputElement>(null);
 
+  // Strip complex HTML from AI output — keep only safe inline/block tags
+  function sanitizeAIHtml(raw: string): string {
+    // Strip markdown code fences: ```html ... ``` or ``` ... ```
+    let html = raw.replace(/^```(?:html)?\s*/i, '').replace(/\s*```\s*$/, '');
+    // Remove <style>...</style> blocks
+    html = html.replace(/<style[\s\S]*?<\/style>/gi, '');
+    // Remove <script>...</script> blocks
+    html = html.replace(/<script[\s\S]*?<\/script>/gi, '');
+    // Replace <div...> and </div> with nothing (unwrap divs)
+    html = html.replace(/<\/?div[^>]*>/gi, '');
+    // Remove class, id, style, dir attributes from all tags
+    html = html.replace(/\s+(class|id|style|dir|data-[a-z-]+)="[^"]*"/gi, '');
+    html = html.replace(/\s+(class|id|style|dir|data-[a-z-]+)='[^']*'/gi, '');
+    // Remove span tags (unwrap content)
+    html = html.replace(/<span[^>]*>([\s\S]*?)<\/span>/gi, '$1');
+    // Remove figure/figcaption wrappers
+    html = html.replace(/<\/?figure[^>]*>/gi, '');
+    html = html.replace(/<\/?figcaption[^>]*>/gi, '');
+    // Remove header/footer/section/article/aside/nav wrappers
+    html = html.replace(/<\/?(header|footer|section|article|aside|nav|main)[^>]*>/gi, '');
+    // Collapse multiple blank lines
+    html = html.replace(/(\s*<br\s*\/?>\s*){3,}/gi, '<br>');
+    html = html.replace(/\n{3,}/g, '\n\n');
+    return html.trim();
+  }
+
   // Apply finished AI result
   useEffect(() => {
     if (!aiJob || !jobData) return;
     if (jobData.status === 'completed' && jobData.result) {
-      setForm(f => ({ ...f, [aiJob.targetField]: jobData.result }));
+      const clean = sanitizeAIHtml(jobData.result);
+      setForm(f => ({ ...f, [aiJob.targetField]: clean }));
       setAiJob(null);
     } else if (jobData.status === 'failed') {
       setError(jobData.error || 'خطای AI');
@@ -264,7 +291,7 @@ export default function CreateContent() {
               : type === 'podcast' ? 'توضیح کوتاه برای پادکست'
               : type === 'media' ? 'توضیح برای فایل رسانه'
               : 'مقاله جامع، روان و خوش‌خوان'
-            } به زبان فارسی درباره موضوع زیر بنویس. خروجی را به صورت HTML ساده برگردان (با p, h2, h3, ul, ol, blockquote, a, strong, em). موضوع: ${form.title_fa}`)}
+            } به زبان فارسی درباره موضوع زیر بنویس.\nفقط از این تگ‌های HTML استفاده کن: <p>, <h2>, <h3>, <ul>, <ol>, <li>, <blockquote>, <strong>, <em>.\nهیچ <div>, <style>, <script>, <span>, class، id، style attribute یا CSS ننویس. خروجی مستقیماً HTML باشد بدون توضیح اضافه.\nموضوع: ${form.title_fa}`)}
             onImprove={() => aiAction('improve', 'content_fa', `متن فارسی زیر را بهبود بده و روان‌تر کن. ساختار HTML را حفظ کن:\n\n${form.content_fa}`)}
             onSEO={() => aiAction('seo', 'content_fa', `یک متن SEO-friendly با meta description و کلمات کلیدی برای موضوع: ${form.title_fa}`)}
           />
