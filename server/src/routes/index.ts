@@ -3,7 +3,14 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { authMiddleware, requireAdmin } from '../middleware/auth';
 import { login, getMe, refreshTokens, logout, loginWithTelegram } from '../auth/authController';
-import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey, listOpenRouterModels, getAdminAIConfig, setAdminAIConfig, deleteAdminAIConfig, setDefaultProvider, getAdminAIConfigForWP } from '../ai/aiController';
+import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey, listOpenRouterModels, getAdminAIConfig, setAdminAIConfig, deleteAdminAIConfig, setDefaultProvider as setAIDefaultProvider, getAdminAIConfigForWP } from '../ai/aiController';
+import {
+  getStatus as cmmGetStatus, getProviders as cmmGetProviders, addProvider as cmmAddProvider,
+  deleteProvider as cmmDeleteProvider, setDefaultProvider as cmmSetDefault,
+  getConfig as cmmGetConfig, saveConfig as cmmSaveConfig,
+  triggerSync as cmmTriggerSync, getLogs as cmmGetLogs,
+  saveSiteKey as cmmSaveSiteKey, testConnection as cmmTestConnection,
+} from '../storage/storageController';
 import {
   listContent, getContent, createContent, updateContent,
   submitForReview, approveContent, rejectContent, deleteContent,
@@ -56,7 +63,7 @@ router.get('/ai/openrouter-models', authMiddleware, listOpenRouterModels);
 router.get   ('/ai/admin/config',                    authMiddleware, requireAdmin, getAdminAIConfig);
 router.post  ('/ai/admin/config',                    authMiddleware, requireAdmin, setAdminAIConfig);
 router.delete('/ai/admin/config/:provider',          authMiddleware, requireAdmin, deleteAdminAIConfig);
-router.patch ('/ai/admin/config/:provider/default',  authMiddleware, requireAdmin, setDefaultProvider);
+router.patch ('/ai/admin/config/:provider/default',  authMiddleware, requireAdmin, setAIDefaultProvider);
 router.get   ('/ai/admin/config/wp-export',          getAdminAIConfigForWP);
 
 // ── AI (async job queue) ──────────────────────────────────────────────────────
@@ -340,5 +347,18 @@ router.get   ('/membership/admin/stats',                  authMiddleware, requir
 router.patch ('/membership/admin/post/:post_id/level',    authMiddleware, requireAdmin, adminSetPostLevel);
 router.post  ('/membership/admin/expire',                 authMiddleware, requireAdmin, adminRunExpire);
 router.get   ('/membership/admin/transactions',           authMiddleware, requireAdmin, adminGetTransactions);
+
+// ── Cloud Media Manager (CMM) ────────────────────────────────────────────────
+router.get   ('/storage/status',              authMiddleware, requireAdmin, cmmGetStatus);
+router.get   ('/storage/providers',           authMiddleware, requireAdmin, cmmGetProviders);
+router.post  ('/storage/providers',           authMiddleware, requireAdmin, cmmAddProvider);
+router.delete('/storage/providers/:id',       authMiddleware, requireAdmin, cmmDeleteProvider);
+router.post  ('/storage/providers/:id/default', authMiddleware, requireAdmin, cmmSetDefault);
+router.get   ('/storage/config',              authMiddleware, requireAdmin, cmmGetConfig);
+router.post  ('/storage/config',              authMiddleware, requireAdmin, cmmSaveConfig);
+router.post  ('/storage/sync',                authMiddleware, requireAdmin, cmmTriggerSync);
+router.get   ('/storage/logs',                authMiddleware, requireAdmin, cmmGetLogs);
+router.post  ('/storage/site-key',            authMiddleware, requireAdmin, cmmSaveSiteKey);
+router.get   ('/storage/test',                authMiddleware, requireAdmin, cmmTestConnection);
 
 export default router;

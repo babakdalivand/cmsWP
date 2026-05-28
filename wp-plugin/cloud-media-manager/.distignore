@@ -1,0 +1,10 @@
+tests/
+vendor/
+node_modules/
+phpunit.xml
+.phpunit.result.cache
+composer.json
+composer.lock
+.gitignore
+.distignore
+SECURITY.md

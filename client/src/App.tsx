@@ -14,6 +14,7 @@ import Comments       from './pages/Comments';
 import YouTubeManager from './pages/YouTubeManager';
 import Membership    from './pages/Membership';
 import Profile      from './pages/Profile';
+import CloudStorage from './pages/CloudStorage';
 import BottomNav    from './components/layout/BottomNav';
 
 function ProtectedLayout({ children }: { children: React.ReactNode }) {
@@ -44,7 +45,8 @@ export default function App() {
         <Route path="/monitoring" element={<ProtectedLayout><Monitoring /></ProtectedLayout>} />
         <Route path="/youtube"     element={<ProtectedLayout><YouTubeManager /></ProtectedLayout>} />
         <Route path="/membership"  element={<ProtectedLayout><Membership /></ProtectedLayout>} />
-        <Route path="/profile"     element={<ProtectedLayout><Profile /></ProtectedLayout>} />
+        <Route path="/profile"       element={<ProtectedLayout><Profile /></ProtectedLayout>} />
+        <Route path="/cloud-storage" element={<ProtectedLayout><CloudStorage /></ProtectedLayout>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
