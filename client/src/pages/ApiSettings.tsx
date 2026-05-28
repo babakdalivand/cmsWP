@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Key, Check, Trash2, Eye, EyeOff, TestTube2, Plus, X, Search } from 'lucide-react';
+import { Key, Check, Trash2, Eye, EyeOff, TestTube2, Plus, X, Search, Globe, User } from 'lucide-react';
 import { api } from '../api/client';
+import { useAuthStore } from '../store/authStore';
 
 interface BuiltInProvider {
   id: string;
@@ -64,6 +65,7 @@ interface BuiltInKey {
   provider: string;
   nickname: string;
   hasKey: boolean;
+  hasGlobalKey: boolean;
 }
 
 interface KeysResponse {
@@ -76,9 +78,11 @@ interface KeysResponse {
 type TestResult = { ok: boolean; message?: string; error?: string; sample?: string };
 
 export default function ApiSettings() {
+  const isAdmin = useAuthStore(s => s.isAdmin());
   const [data, setData]       = useState<KeysResponse | null>(null);
   const [inputs, setInputs]   = useState<Record<string, string>>({});
   const [show, setShow]       = useState<Record<string, boolean>>({});
+  const [globalMode, setGlobalMode] = useState<Record<string, boolean>>({});
   const [saving, setSaving]   = useState<string | null>(null);
   const [testing, setTesting] = useState<string | null>(null);
   const [testResult, setTestResult] = useState<Record<string, TestResult>>({});
@@ -98,19 +102,21 @@ export default function ApiSettings() {
     const key = inputs[p.id]?.trim();
     if (!key) return;
     setSaving(p.id);
+    const isGlobal = isAdmin && !!globalMode[p.id];
     try {
-      await api.post('/ai/keys', { provider: p.id, apiKey: key });
+      await api.post('/ai/keys', { provider: p.id, apiKey: key, isGlobal });
       setInputs(i => ({ ...i, [p.id]: '' }));
       reloadKeys();
-      showToast(`کلید ${p.name} ذخیره شد ✓`);
+      showToast(`کلید ${p.name} ${isGlobal ? '(جهانی) ' : ''}ذخیره شد ✓`);
     } catch (e: any) {
       showToast(e.response?.data?.error || 'خطا');
     } finally { setSaving(null); }
   }
 
-  async function deleteBuiltIn(providerId: string) {
-    await api.delete(`/ai/keys/${providerId}`);
-    setTestResult(t => { const c = { ...t }; delete c[providerId]; return c; });
+  async function deleteBuiltIn(providerId: string, isGlobal = false) {
+    const params = isGlobal ? '?global=1' : '';
+    await api.delete(`/ai/keys/${providerId}${params}`);
+    setTestResult(t => { const c = { ...t }; delete c[isGlobal ? `${providerId}:global` : providerId]; return c; });
     reloadKeys();
     showToast('کلید حذف شد');
   }
@@ -162,9 +168,13 @@ export default function ApiSettings() {
       <h2 className="text-white font-semibold text-sm mb-3">پروایدرهای اصلی</h2>
       <div className="flex flex-col gap-3 mb-6">
         {BUILT_IN.map(p => {
-          const builtKey = data.builtIn.find(b => b.provider === p.id);
-          const has = !!builtKey?.hasKey;
-          const result = testResult[p.id];
+          const builtKey   = data.builtIn.find(b => b.provider === p.id);
+          const hasPersonal = !!builtKey?.hasKey;
+          const hasGlobal   = !!builtKey?.hasGlobalKey;
+          const has         = hasPersonal || hasGlobal;
+          const result      = testResult[p.id];
+          const resultGlobal = testResult[`${p.id}:global`];
+          const isGlobalInput = isAdmin && !!globalMode[p.id];
           return (
             <div key={p.id} className={`bg-surface border rounded-xl p-4 transition-colors ${has ? 'border-blue/40' : 'border-border'}`}>
               <div className="flex items-center justify-between mb-3">
@@ -175,47 +185,95 @@ export default function ApiSettings() {
                     <div className="text-label text-xs">{p.model}</div>
                   </div>
                 </div>
-                {has && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 text-success text-xs"><Check size={12} /> فعال</div>
-                    <button onClick={() => testKey(p.id)} disabled={testing === p.id}
-                      className="text-blue hover:bg-blue/10 p-1.5 rounded-lg disabled:opacity-40" title="تست اتصال">
-                      <TestTube2 size={14} />
-                    </button>
-                    <button onClick={() => deleteBuiltIn(p.id)} className="text-danger/70 hover:text-danger p-1.5 rounded-lg hover:bg-danger/10">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                )}
+                <div className="flex items-center gap-1.5">
+                  {hasGlobal && (
+                    <div className="flex items-center gap-1 bg-orange-500/10 border border-orange-500/30 text-orange-400 text-xs px-2 py-0.5 rounded-full">
+                      <Globe size={10} /> جهانی
+                    </div>
+                  )}
+                  {hasPersonal && (
+                    <div className="flex items-center gap-1 text-success text-xs"><Check size={12} /> شخصی</div>
+                  )}
+                  {hasPersonal && (
+                    <>
+                      <button onClick={() => testKey(p.id)} disabled={testing === p.id}
+                        className="text-blue hover:bg-blue/10 p-1.5 rounded-lg disabled:opacity-40" title="تست کلید شخصی">
+                        <TestTube2 size={14} />
+                      </button>
+                      <button onClick={() => deleteBuiltIn(p.id, false)} className="text-danger/70 hover:text-danger p-1.5 rounded-lg hover:bg-danger/10">
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
+                  {isAdmin && hasGlobal && (
+                    <>
+                      <button onClick={() => testKey(p.id)} disabled={testing === p.id}
+                        className="text-orange-400 hover:bg-orange-400/10 p-1.5 rounded-lg disabled:opacity-40" title="تست کلید جهانی">
+                        <TestTube2 size={14} />
+                      </button>
+                      <button onClick={() => deleteBuiltIn(p.id, true)} className="text-orange-400/70 hover:text-orange-400 p-1.5 rounded-lg hover:bg-orange-400/10" title="حذف کلید جهانی">
+                        <Trash2 size={14} />
+                      </button>
+                    </>
+                  )}
+                </div>
               </div>
 
-              {!has && (
-                <div className="flex gap-2">
-                  <div className="relative flex-1">
-                    <input
-                      type={show[p.id] ? 'text' : 'password'}
-                      value={inputs[p.id] || ''}
-                      onChange={e => setInputs(i => ({ ...i, [p.id]: e.target.value }))}
-                      placeholder={`کلید API ${p.name}`}
-                      dir="ltr"
-                      className="w-full bg-bg border border-border rounded-lg px-3 py-2.5 text-white placeholder-label text-sm focus:outline-none focus:border-blue pl-10"
-                    />
-                    <button onClick={() => setShow(s => ({ ...s, [p.id]: !s[p.id] }))}
-                      className="absolute left-3 top-1/2 -translate-y-1/2 text-label">
-                      {show[p.id] ? <EyeOff size={14} /> : <Eye size={14} />}
-                    </button>
-                  </div>
-                  <button
-                    onClick={() => saveBuiltIn(p)}
-                    disabled={saving === p.id || !inputs[p.id]}
-                    className="bg-blue disabled:opacity-40 text-white px-4 py-2.5 rounded-lg text-sm font-medium hover:bg-blue-hover transition-colors flex items-center gap-1"
-                  >
-                    {saving === p.id ? '...' : <><Key size={14} /> ذخیره</>}
-                  </button>
+              {/* Admin: show global key test result */}
+              {isAdmin && hasGlobal && resultGlobal && (
+                <TestResultBox testing={testing === `${p.id}:global`} result={resultGlobal} />
+              )}
+
+              {/* Input area for adding a key */}
+              {(!hasPersonal || (isAdmin && !hasGlobal)) && (
+                <div className="flex flex-col gap-2">
+                  {/* Admin global toggle */}
+                  {isAdmin && (
+                    <div className="flex items-center gap-2 py-1">
+                      <button
+                        onClick={() => setGlobalMode(m => ({ ...m, [p.id]: !m[p.id] }))}
+                        className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-colors ${
+                          isGlobalInput
+                            ? 'bg-orange-500/10 border-orange-500/40 text-orange-400'
+                            : 'bg-bg border-border text-label hover:text-white'
+                        }`}
+                      >
+                        {isGlobalInput ? <Globe size={12} /> : <User size={12} />}
+                        {isGlobalInput ? 'کلید جهانی (همه کاربران)' : 'کلید شخصی'}
+                      </button>
+                    </div>
+                  )}
+                  {(!hasPersonal || (isAdmin && isGlobalInput && !hasGlobal)) && (
+                    <div className="flex gap-2">
+                      <div className="relative flex-1">
+                        <input
+                          type={show[p.id] ? 'text' : 'password'}
+                          value={inputs[p.id] || ''}
+                          onChange={e => setInputs(i => ({ ...i, [p.id]: e.target.value }))}
+                          placeholder={`کلید API ${p.name}`}
+                          dir="ltr"
+                          className="w-full bg-bg border border-border rounded-lg px-3 py-2.5 text-white placeholder-label text-sm focus:outline-none focus:border-blue pl-10"
+                        />
+                        <button onClick={() => setShow(s => ({ ...s, [p.id]: !s[p.id] }))}
+                          className="absolute left-3 top-1/2 -translate-y-1/2 text-label">
+                          {show[p.id] ? <EyeOff size={14} /> : <Eye size={14} />}
+                        </button>
+                      </div>
+                      <button
+                        onClick={() => saveBuiltIn(p)}
+                        disabled={saving === p.id || !inputs[p.id]}
+                        className={`disabled:opacity-40 text-white px-4 py-2.5 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${
+                          isGlobalInput ? 'bg-orange-500 hover:bg-orange-600' : 'bg-blue hover:bg-blue-hover'
+                        }`}
+                      >
+                        {saving === p.id ? '...' : <><Key size={14} /> ذخیره</>}
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
 
-              {has && result && (
+              {hasPersonal && result && (
                 <TestResultBox testing={testing === p.id} result={result} />
               )}
             </div>

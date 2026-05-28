@@ -60,57 +60,73 @@ export async function pollJob(req: Request, res: Response) {
 const CUSTOM_LIMIT = { admin: 5, editor: 2 } as const;
 
 export async function saveUserKey(req: Request, res: Response) {
-  const userId = (req as any).user.userId;
-  const role   = (req as any).user.role || 'editor';
-  const { provider, apiKey, customUrl, customModel, nickname, displayName } = req.body;
+  const userId  = (req as any).user.userId;
+  const role    = (req as any).user.role || 'editor';
+  const isAdmin = role === 'admin';
+  const { provider, apiKey, customUrl, customModel, nickname, displayName, isGlobal = false } = req.body;
 
   if (!AI_PROVIDER_LIST.includes(provider as AIProvider)) {
     return res.status(400).json({ error: 'پروایدر نامعتبر' });
   }
   if (!apiKey?.trim()) return res.status(400).json({ error: 'کلید API الزامی است' });
+  if (isGlobal && !isAdmin) return res.status(403).json({ error: 'فقط ادمین می‌تواند کلید جهانی تنظیم کند' });
 
   const isCustom = provider === 'custom';
   if (isCustom && (!customUrl?.trim() || !customModel?.trim() || !nickname?.trim())) {
     return res.status(400).json({ error: 'برای پروایدر سفارشی، نام، URL و مدل الزامی است' });
   }
 
-  const nick = isCustom ? nickname.trim() : '';
+  const nick    = isCustom ? nickname.trim() : '';
+  const ownerId = (isAdmin && isGlobal) ? null : userId;
 
-  if (isCustom) {
-    // Check whether this exact nickname already exists for this user (we'd be updating it)
+  if (isCustom && !isGlobal) {
     const existing = await query<{ id: number }>(
       `SELECT id FROM user_ai_keys WHERE user_id=? AND provider='custom' AND nickname=? AND is_active=1`,
       [userId, nick]
     );
     if (existing.length === 0) {
-      // New custom provider — enforce limit
       const countRows = await query<{ c: number }>(
         `SELECT COUNT(*) as c FROM user_ai_keys WHERE user_id=? AND provider='custom' AND is_active=1`,
         [userId]
       );
       const used  = parseInt(String(countRows[0]?.c || '0'));
-      const limit = CUSTOM_LIMIT[role === 'admin' ? 'admin' : 'editor'];
+      const limit = CUSTOM_LIMIT[isAdmin ? 'admin' : 'editor'];
       if (used >= limit) {
-        return res.status(403).json({
-          error: `سهمیه پروایدر سفارشی شما (${limit} پروایدر) تمام شده`,
-        });
+        return res.status(403).json({ error: `سهمیه پروایدر سفارشی شما (${limit} پروایدر) تمام شده` });
       }
     }
   }
 
   const encrypted = encrypt(apiKey.trim());
-  await query(
-    `INSERT INTO user_ai_keys (user_id, provider, nickname, display_name, api_key_enc, custom_url, custom_model, is_active)
-     VALUES (?, ?, ?, ?, ?, ?, ?, 1)
-     ON DUPLICATE KEY UPDATE
-       api_key_enc=VALUES(api_key_enc),
-       display_name=VALUES(display_name),
-       custom_url=VALUES(custom_url),
-       custom_model=VALUES(custom_model),
-       is_active=1`,
-    [userId, provider, nick, displayName?.trim() || null, encrypted, customUrl?.trim() || null, customModel?.trim() || null]
-  );
-  return res.json({ success: true, message: `کلید ${displayName || provider} ذخیره شد` });
+
+  if (isGlobal && isAdmin) {
+    // Global keys: upsert by (provider, nickname, is_global=1, user_id IS NULL)
+    await query(
+      `INSERT INTO user_ai_keys (user_id, provider, nickname, display_name, api_key_enc, custom_url, custom_model, is_global, is_active)
+       VALUES (NULL, ?, ?, ?, ?, ?, ?, 1, 1)
+       ON DUPLICATE KEY UPDATE
+         api_key_enc=VALUES(api_key_enc),
+         display_name=VALUES(display_name),
+         custom_url=VALUES(custom_url),
+         custom_model=VALUES(custom_model),
+         is_active=1`,
+      [provider, nick, displayName?.trim() || null, encrypted, customUrl?.trim() || null, customModel?.trim() || null]
+    );
+  } else {
+    await query(
+      `INSERT INTO user_ai_keys (user_id, provider, nickname, display_name, api_key_enc, custom_url, custom_model, is_global, is_active)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1)
+       ON DUPLICATE KEY UPDATE
+         api_key_enc=VALUES(api_key_enc),
+         display_name=VALUES(display_name),
+         custom_url=VALUES(custom_url),
+         custom_model=VALUES(custom_model),
+         is_active=1`,
+      [ownerId, provider, nick, displayName?.trim() || null, encrypted, customUrl?.trim() || null, customModel?.trim() || null]
+    );
+  }
+
+  return res.json({ success: true, message: `کلید ${displayName || provider}${isGlobal ? ' (جهانی)' : ''} ذخیره شد` });
 }
 
 export async function testUserKey(req: Request, res: Response) {
@@ -135,40 +151,41 @@ export async function testUserKey(req: Request, res: Response) {
 }
 
 export async function getUserKeys(req: Request, res: Response) {
-  const userId = (req as any).user.userId;
-  const role   = (req as any).user.role || 'editor';
+  const userId  = (req as any).user.userId;
+  const role    = (req as any).user.role || 'editor';
+  const isAdmin = role === 'admin';
 
-  const rows = await query<{
-    provider: string; nickname: string; display_name: string | null;
-    custom_url: string | null; custom_model: string | null; is_active: number;
-  }>(
-    'SELECT provider, nickname, display_name, custom_url, custom_model, is_active FROM user_ai_keys WHERE user_id=? AND is_active=1 ORDER BY provider, nickname',
-    [userId]
-  );
+  const [personalRows, globalRows] = await Promise.all([
+    query<{ provider: string; nickname: string; display_name: string | null; custom_url: string | null; custom_model: string | null }>(
+      'SELECT provider, nickname, display_name, custom_url, custom_model FROM user_ai_keys WHERE user_id=? AND is_active=1 ORDER BY provider, nickname',
+      [userId]
+    ),
+    isAdmin
+      ? query<{ provider: string; nickname: string; display_name: string | null; custom_url: string | null; custom_model: string | null }>(
+          'SELECT provider, nickname, display_name, custom_url, custom_model FROM user_ai_keys WHERE user_id IS NULL AND is_global=1 AND is_active=1 ORDER BY provider, nickname',
+          []
+        )
+      : Promise.resolve([]),
+  ]);
 
-  // Built-in providers: one entry each
   const builtIn = AI_PROVIDER_LIST.filter(p => p !== 'custom').map(p => ({
-    provider: p,
-    nickname: '',
-    displayName: null as string | null,
-    customUrl: null as string | null,
-    customModel: null as string | null,
-    hasKey: rows.some(r => r.provider === p && r.nickname === ''),
+    provider:     p,
+    hasKey:       personalRows.some(r => r.provider === p && r.nickname === ''),
+    hasGlobalKey: globalRows.some(r => r.provider === p && r.nickname === ''),
   }));
 
-  // Custom providers: one entry per (provider='custom', nickname)
-  const customKeys = rows
+  const customKeys = personalRows
     .filter(r => r.provider === 'custom')
     .map(r => ({
-      provider: 'custom' as const,
-      nickname: r.nickname,
+      provider:    'custom' as const,
+      nickname:    r.nickname,
       displayName: r.display_name,
-      customUrl: r.custom_url,
+      customUrl:   r.custom_url,
       customModel: r.custom_model,
-      hasKey: true,
+      isGlobal:    false,
     }));
 
-  const customLimit = CUSTOM_LIMIT[role === 'admin' ? 'admin' : 'editor'];
+  const customLimit = CUSTOM_LIMIT[isAdmin ? 'admin' : 'editor'];
 
   return res.json({
     builtIn,
@@ -179,13 +196,23 @@ export async function getUserKeys(req: Request, res: Response) {
 }
 
 export async function deleteUserKey(req: Request, res: Response) {
-  const userId = (req as any).user.userId;
+  const userId   = (req as any).user.userId;
+  const isAdmin  = (req as any).user.role === 'admin';
   const provider = req.params.provider;
   const nickname = (req.query.nickname as string) || '';
-  await query(
-    'UPDATE user_ai_keys SET is_active=0 WHERE user_id=? AND provider=? AND nickname=?',
-    [userId, provider, nickname]
-  );
+  const isGlobal = req.query.global === '1' && isAdmin;
+
+  if (isGlobal) {
+    await query(
+      'UPDATE user_ai_keys SET is_active=0 WHERE user_id IS NULL AND is_global=1 AND provider=? AND nickname=?',
+      [provider, nickname]
+    );
+  } else {
+    await query(
+      'UPDATE user_ai_keys SET is_active=0 WHERE user_id=? AND provider=? AND nickname=?',
+      [userId, provider, nickname]
+    );
+  }
   return res.json({ success: true });
 }
 

@@ -113,6 +113,8 @@ const alterSql = [
   `ALTER TABLE user_ai_keys ADD COLUMN custom_model VARCHAR(200) NULL`,
   `ALTER TABLE user_ai_keys ADD COLUMN nickname VARCHAR(100) NOT NULL DEFAULT ''`,
   `ALTER TABLE user_ai_keys ADD COLUMN display_name VARCHAR(150) NULL`,
+  `ALTER TABLE user_ai_keys ADD COLUMN is_global TINYINT(1) NOT NULL DEFAULT 0`,
+  `ALTER TABLE user_ai_keys MODIFY COLUMN user_id INT NULL`,
 ];
 
 // Unique-key migration: switch from (user_id, provider) to (user_id, provider, nickname)

@@ -82,9 +82,14 @@ async function callProvider(
 async function getUserKey(userId: number, provider: AIProvider, nickname: string = ''):
   Promise<{ key: string; customUrl: string | null; customModel: string | null } | null>
 {
+  // Personal key first, then global admin key
   const row = await queryOne<{ api_key_enc: string; custom_url: string | null; custom_model: string | null }>(
-    'SELECT api_key_enc, custom_url, custom_model FROM user_ai_keys WHERE user_id=? AND provider=? AND nickname=? AND is_active=1',
-    [userId, provider, nickname]
+    `SELECT api_key_enc, custom_url, custom_model FROM user_ai_keys
+     WHERE provider=? AND nickname=? AND is_active=1
+       AND (user_id=? OR (user_id IS NULL AND is_global=1))
+     ORDER BY (user_id IS NULL) ASC
+     LIMIT 1`,
+    [provider, nickname, userId]
   );
   if (!row) return null;
   try {

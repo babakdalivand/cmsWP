@@ -35,7 +35,7 @@ export default function YouTubeManager() {
   const tabs: { key: Tab; icon: React.ReactNode; label: string; badge?: number }[] = [
     { key: 'channels',  icon: <Youtube size={14} />,    label: 'کانال‌ها'  },
     { key: 'queue',     icon: <List size={14} />,        label: 'صف', badge: pendingCount },
-    { key: 'shorts',    icon: <Smartphone size={14} />,  label: 'شورت'      },
+    { key: 'shorts',    icon: <Smartphone size={14} />,  label: 'ویدئو کوتاه' },
     { key: 'playlists', icon: <Play size={14} />,        label: 'پلی‌لیست'  },
     { key: 'analytics', icon: <BarChart3 size={14} />,   label: 'آمار'      },
     { key: 'settings',  icon: <Settings size={14} />,    label: 'تنظیمات'   },
@@ -103,7 +103,10 @@ function ChannelsTab() {
   const toastCh = (set: (v:string)=>void, setT: (v:'ok'|'err')=>void, msg: string, type: 'ok'|'err') => {
     setT(type); set(msg); setTimeout(() => set(''), 6000);
   };
-  const errMsg = (e: any) => e?.response?.data?.error || e?.response?.data?.message || e?.message || 'خطای ناشناخته';
+  const errMsg = (e: any) => {
+    if (e?.response?.status === 429 || e?.message?.includes('429')) return 'درخواست‌های زیاد — لطفاً چند ثانیه صبر کنید';
+    return e?.response?.data?.error || e?.response?.data?.message || e?.message || 'خطای ناشناخته';
+  };
 
   const add = useMutation({
     mutationFn: () => api.post('/youtube/channels', { channel_input: input, lang }).then(r => r.data),
@@ -140,7 +143,7 @@ function ChannelsTab() {
       setImportingChId(null);
       qc.invalidateQueries({ queryKey: ['yt', '/queue'] });
       toastCh(setImportMsg, setImportMsgType,
-        `✅ ${d.queued} شورت به صف اضافه شد (${d.skipped} تکراری)`, 'ok');
+        `✅ ${d.queued} ویدئو کوتاه به صف اضافه شد (${d.skipped} تکراری)`, 'ok');
     },
     onError: (e: any) => { setImportingChId(null); toastCh(setImportMsg, setImportMsgType, '❌ ' + errMsg(e), 'err'); },
   });
@@ -194,7 +197,7 @@ function ChannelsTab() {
 
       {isError && (
         <div className="rounded-lg px-3 py-2 text-xs font-medium" style={{ background: '#fee2e2', color: '#dc2626' }}>
-          ❌ خطا در بارگذاری کانال‌ها: {(error as any)?.response?.data?.error || (error as any)?.message || 'خطای ناشناخته'}
+          ❌ {errMsg(error)}
         </div>
       )}
       {isLoading && <p className="text-sm text-center py-4" style={{ color: 'var(--label)' }}>در حال بارگذاری...</p>}
@@ -222,7 +225,7 @@ function ChannelsTab() {
                 {[
                   { k: 'enabled',       l: 'فعال'    },
                   { k: 'import_videos', l: 'ویدیوها' },
-                  { k: 'import_shorts', l: 'شورت‌ها' },
+                  { k: 'import_shorts', l: 'ویدئوهای کوتاه' },
                   { k: 'show_live',     l: 'لایو'     },
                 ].map(({ k, l }) => (
                   <label key={k} className="flex items-center gap-1 cursor-pointer">
@@ -250,7 +253,7 @@ function ChannelsTab() {
                 className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-semibold"
                 style={{ background: '#f59e0b20', color: '#d97706', border: '1px solid #f59e0b40' }}>
                 <Smartphone size={13} />
-                {importingChId === ch.id ? '⏳ در حال import...' : '📥 وارد کردن همه شورت‌ها'}
+                {importingChId === ch.id ? '⏳ در حال import...' : '📥 وارد کردن همه ویدئوهای کوتاه'}
               </button>
             </div>
           )}
@@ -351,7 +354,7 @@ function SwipeCard({ item, onApprove, onReject }: SwipeCardProps) {
             <p className="text-sm font-semibold line-clamp-2 leading-snug">{item.title}</p>
             <div className="flex items-center gap-2 mt-1 flex-wrap">
               <span className="text-xs" style={{ color: 'var(--label)' }}>
-                {item.type === 'short' ? '📱 شورت' : '🎬 ویدیو'}
+                {item.type === 'short' ? '📱 ویدئو کوتاه' : '🎬 ویدیو'}
               </span>
               {item.duration_sec > 0 && (
                 <span className="text-xs ltr font-mono" style={{ color: 'var(--label)' }}>
@@ -619,7 +622,7 @@ function ShortsTab() {
         <input
           value={search}
           onChange={e => setSearch(e.target.value)}
-          placeholder="جستجو در شورت‌ها..."
+          placeholder="جستجو در ویدئوهای کوتاه..."
           className="w-full rounded-xl pr-9 pl-3 py-2.5 text-sm"
           style={{ background: 'var(--surface)', border: '1px solid var(--border)' }}
         />
@@ -655,18 +658,18 @@ function ShortsTab() {
           <p className="text-2xl font-bold" style={{ color: '#f59e0b' }}>
             {pendingData?.total ?? pending.length}
           </p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--label)' }}>شورت در انتظار</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--label)' }}>ویدئو کوتاه در انتظار</p>
         </div>
         <div className="raha-card p-3 text-center">
           <p className="text-2xl font-bold" style={{ color: '#22c55e' }}>
             {approvedData?.total ?? approved.length}
           </p>
-          <p className="text-xs mt-0.5" style={{ color: 'var(--label)' }}>شورت منتشر</p>
+          <p className="text-xs mt-0.5" style={{ color: 'var(--label)' }}>ویدئو کوتاه منتشر</p>
         </div>
       </div>
 
       <p className="text-sm font-semibold">
-        شورت‌های در انتظار ({search ? allPending.length : (pendingData?.total ?? allPending.length)})
+        ویدئوهای کوتاه در انتظار ({search ? allPending.length : (pendingData?.total ?? allPending.length)})
         {pendingData?.total > pending.length && !search && (
           <span className="text-xs font-normal mr-1" style={{ color: 'var(--label)' }}>
             — نمایش {pending.length} تا
@@ -706,7 +709,7 @@ function ShortsTab() {
 
       {!pendingLoading && allPending.length === 0 && (
         <p className="text-center text-sm py-6" style={{ color: 'var(--label)' }}>
-          {search ? 'نتیجه‌ای یافت نشد' : 'شورتی در انتظار تأیید نیست'}
+          {search ? 'نتیجه‌ای یافت نشد' : 'ویدئو کوتاهی در انتظار تأیید نیست'}
         </p>
       )}
     </div>
@@ -866,7 +869,7 @@ function AnalyticsTab() {
   // Format comparison for pie
   const formatPie = useMemo(() =>
     (comparison as any[]).map((c: any) => ({
-      name: c.type === 'short' ? 'شورت' : 'ویدیو',
+      name: c.type === 'short' ? 'ویدئو کوتاه' : 'ویدیو',
       value: parseInt(c.video_count || 0),
     })), [comparison]);
 
@@ -885,7 +888,7 @@ function AnalyticsTab() {
 توصیه‌ها باید عملی، کوتاه و به فارسی باشند.`;
 
     try {
-      const { data } = await api.post('/ai/generate', { action: 'summarize', content: prompt, lang: 'fa' });
+      const { data } = await api.post('/ai/summarize', { content: prompt, language: 'fa' });
       setAiRec(data.result || data.content || 'پاسخی دریافت نشد');
     } catch {
       setAiRec('خطا در اتصال به هوش مصنوعی');
@@ -993,7 +996,7 @@ function AnalyticsTab() {
                     <span className="text-[9px] shrink-0 px-1.5 py-0.5 rounded"
                       style={{ background: v.type === 'short' ? '#f59e0b20' : 'var(--surface)',
                                color: v.type === 'short' ? '#f59e0b' : 'var(--label)' }}>
-                      {v.type === 'short' ? 'شورت' : 'ویدیو'}
+                      {v.type === 'short' ? 'ویدئو کوتاه' : 'ویدیو'}
                     </span>
                   </div>
                 ))}
@@ -1141,7 +1144,7 @@ function AnalyticsTab() {
 
           {(comparison as any[]).map((c: any) => (
             <div key={c.type} className="raha-card p-3">
-              <p className="text-sm font-bold mb-2">{c.type === 'short' ? '📱 شورت' : '🎬 ویدیوی عادی'}</p>
+              <p className="text-sm font-bold mb-2">{c.type === 'short' ? '📱 ویدئو کوتاه' : '🎬 ویدیوی عادی'}</p>
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { label: 'تعداد', value: c.video_count },
@@ -1400,7 +1403,7 @@ function SettingsTab() {
   const reclassify = useMutation({
     mutationFn: () => api.post('/youtube/queue/reclassify').then(r => r.data),
     onSuccess: (d) => {
-      toast(setReclMsg, setReclMsgType, `✅ بازطبقه‌بندی انجام شد — شورت: ${d.shorts} | ویدیو: ${d.videos}`, 'ok');
+      toast(setReclMsg, setReclMsgType, `✅ بازطبقه‌بندی انجام شد — ویدئو کوتاه: ${d.shorts} | ویدیو: ${d.videos}`, 'ok');
       qc.invalidateQueries({ queryKey: ['yt'] });
     },
     onError: (e: any) => toast(setReclMsg, setReclMsgType, '❌ ' + errMsg(e), 'err'),
@@ -1528,7 +1531,7 @@ function SettingsTab() {
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold"
             style={{ background: 'var(--surface)', border: '1px solid var(--border)', color: 'var(--primary)' }}>
             <Smartphone size={16} className={reclassify.isPending ? 'animate-spin' : ''} />
-            {reclassify.isPending ? 'در حال بازطبقه‌بندی...' : 'بازطبقه‌بندی شورت‌ها'}
+            {reclassify.isPending ? 'در حال بازطبقه‌بندی...' : 'بازطبقه‌بندی ویدئوهای کوتاه'}
           </button>
           {reclMsg && (
             <div className="rounded-lg px-3 py-2 text-xs font-medium"
