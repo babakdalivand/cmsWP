@@ -44,7 +44,7 @@ async function pluginRequest(
   const token = makePluginJwt(siteKey, wpUrl, wpUrl);
   const url   = `${wpUrl}/wp-json/cmm/v1${path}`;
 
-  const res = await axios({ method, url, data, params, headers: { Authorization: `Bearer ${token}` }, timeout: 15000 });
+  const res = await axios({ method, url, data, params, headers: { 'X-CMM-Token': token }, timeout: 15000 });
   return res.data;
 }
 

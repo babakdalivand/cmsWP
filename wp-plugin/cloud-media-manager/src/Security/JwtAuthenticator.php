@@ -6,24 +6,36 @@ class JwtAuthenticator {
     private const ROUTE_PREFIX = '/wp-json/cmm/v1';
 
     public function register(): void {
-        add_filter('rest_authentication_errors', [$this, 'authenticate'], 20);
+        add_filter('rest_authentication_errors', [$this, 'authenticate'], 1);
     }
 
     public function authenticate(mixed $result): mixed {
         if (!str_contains($_SERVER['REQUEST_URI'] ?? '', self::ROUTE_PREFIX)) {
             return $result;
         }
-        $token = $this->extractBearerToken();
+
+        // اگر قبلاً توسط فیلتر دیگری تأیید شده، بپذیر
+        if ($result === true) {
+            return true;
+        }
+
+        $token = $this->extractToken();
         if ($token === null) {
             return new \WP_Error('cmm_auth_missing', 'Authorization token required.', ['status' => 401]);
         }
         return $this->validateToken($token);
     }
 
-    private function extractBearerToken(): ?string {
-        $header = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
-        if (str_starts_with($header, 'Bearer ')) {
-            return substr($header, 7);
+    private function extractToken(): ?string {
+        // اول هدر اختصاصی X-CMM-Token را بررسی کن
+        $custom = $_SERVER['HTTP_X_CMM_TOKEN'] ?? '';
+        if ($custom !== '') {
+            return $custom;
+        }
+        // fallback: Authorization: Bearer ...
+        $auth = $_SERVER['HTTP_AUTHORIZATION'] ?? '';
+        if (str_starts_with($auth, 'Bearer ')) {
+            return substr($auth, 7);
         }
         return null;
     }
