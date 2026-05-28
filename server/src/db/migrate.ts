@@ -2,6 +2,12 @@ import { pool } from './pool';
 import { Pool } from 'mysql2/promise';
 
 const tableSql = [
+  `CREATE TABLE IF NOT EXISTS site_config (
+    config_key   VARCHAR(100) PRIMARY KEY,
+    config_value TEXT,
+    updated_at   DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+
   `CREATE TABLE IF NOT EXISTS users (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     wp_user_id      INT UNIQUE NOT NULL,

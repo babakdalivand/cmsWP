@@ -62,5 +62,6 @@ export const config = {
     adminChatId: process.env.TELEGRAM_ADMIN_CHAT_ID || '',
   },
 
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  clientUrl:    process.env.CLIENT_URL    || 'http://localhost:5173',
+  wpSyncToken:  process.env.WP_SYNC_TOKEN || '',
 };

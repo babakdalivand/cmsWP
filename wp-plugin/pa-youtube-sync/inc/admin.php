@@ -150,6 +150,7 @@ function pays_admin_page(): void {
         'playlists' => '🎵 پلی‌لیست',
         'analytics' => '📊 آنالیتیکس',
         'sync'      => '🔄 سینک',
+        'ai_global' => '🔑 کلید AI',
         'settings'  => '⚙️ تنظیمات',
     ];
     ?>
@@ -169,6 +170,7 @@ function pays_admin_page(): void {
         'queue'     => pays_tab_queue(),
         'playlists' => pays_tab_playlists(),
         'analytics' => pays_tab_analytics(),
+        'ai_global' => pays_render_ai_global_tab(),
         default     => pays_tab_channels(),
     };
     ?></div><?php

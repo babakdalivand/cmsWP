@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Key, Check, Trash2, Eye, EyeOff, TestTube2, Plus, X, Search, Globe, User } from 'lucide-react';
+import { Key, Check, Trash2, Eye, EyeOff, TestTube2, Plus, X, Search, Globe, User, Settings2, Star } from 'lucide-react';
 import { api } from '../api/client';
 import { useAuthStore } from '../store/authStore';
 
@@ -76,6 +76,173 @@ interface KeysResponse {
 }
 
 type TestResult = { ok: boolean; message?: string; error?: string; sample?: string };
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Admin Global AI Config Panel
+// ─────────────────────────────────────────────────────────────────────────────
+
+interface GlobalKeyInfo { provider: string; displayName: string | null; isDefault: boolean }
+interface AdminAIConfigData { globalKeys: GlobalKeyInfo[]; defaultProvider: string | null }
+
+function AdminAIConfigPanel({ onToast }: { onToast: (msg: string) => void }) {
+  const [cfg, setCfg]           = useState<AdminAIConfigData | null>(null);
+  const [selProvider, setSelProvider] = useState('gemini');
+  const [apiKey, setApiKey]     = useState('');
+  const [showKey, setShowKey]   = useState(false);
+  const [saving, setSaving]     = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
+  const [open, setOpen]         = useState(true);
+
+  function reload() {
+    api.get('/ai/admin/config').then(r => setCfg(r.data));
+  }
+  useEffect(() => { reload(); }, []);
+
+  async function handleSave() {
+    if (!apiKey.trim()) return;
+    setSaving(true);
+    try {
+      const { data } = await api.post('/ai/admin/config', {
+        provider: selProvider, apiKey: apiKey.trim(), setAsDefault: true,
+      });
+      setApiKey('');
+      reload();
+      onToast(data.message || 'ذخیره شد ✓');
+    } catch (e: any) {
+      onToast(e.response?.data?.error || 'خطا');
+    } finally { setSaving(false); }
+  }
+
+  async function handleDelete(provider: string) {
+    setDeleting(provider);
+    try {
+      await api.delete(`/ai/admin/config/${provider}`);
+      reload();
+      onToast(`کلید ${provider} حذف شد`);
+    } finally { setDeleting(null); }
+  }
+
+  const PROVIDER_NAMES: Record<string, { name: string; icon: string }> = {
+    gemini:   { name: 'Google Gemini',  icon: '🧠' },
+    openai:   { name: 'OpenAI GPT-4o',  icon: '🤖' },
+    claude:   { name: 'Claude Sonnet',  icon: '✦'  },
+    deepseek: { name: 'DeepSeek',       icon: '🔍' },
+    grok:     { name: 'Grok (xAI)',     icon: '⚡' },
+    mistral:  { name: 'Mistral AI',     icon: '🌬️' },
+  };
+
+  return (
+    <div className="bg-surface border border-orange-500/30 rounded-xl mb-6 overflow-hidden">
+      <button
+        onClick={() => setOpen(o => !o)}
+        className="w-full flex items-center justify-between px-4 py-3 text-orange-400 hover:bg-orange-500/5 transition-colors"
+      >
+        <div className="flex items-center gap-2 font-semibold text-sm">
+          <Settings2 size={16} />
+          کلید AI جهانی (ادمین)
+        </div>
+        <div className="flex items-center gap-2">
+          {cfg?.defaultProvider && (
+            <span className="text-xs bg-orange-500/10 border border-orange-500/20 px-2 py-0.5 rounded-full">
+              {PROVIDER_NAMES[cfg.defaultProvider]?.icon} {PROVIDER_NAMES[cfg.defaultProvider]?.name || cfg.defaultProvider} فعال
+            </span>
+          )}
+          <span className="text-label text-xs">{open ? '▲' : '▼'}</span>
+        </div>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 border-t border-orange-500/20">
+          <p className="text-label text-xs mt-3 mb-4">
+            کلید جهانی برای همه کاربرانی که کلید شخصی ندارند استفاده می‌شود.
+            پروایدر پیش‌فرض به‌عنوان AI اصلی سایت فعال می‌شود.
+          </p>
+
+          {/* Current global keys */}
+          {cfg && cfg.globalKeys.length > 0 && (
+            <div className="flex flex-col gap-2 mb-4">
+              {cfg.globalKeys.map(k => {
+                const info = PROVIDER_NAMES[k.provider];
+                return (
+                  <div key={k.provider}
+                    className="flex items-center justify-between bg-bg rounded-lg px-3 py-2.5 border border-orange-500/20">
+                    <div className="flex items-center gap-2">
+                      <span>{info?.icon || '🔑'}</span>
+                      <span className="text-white text-sm">{info?.name || k.provider}</span>
+                      {k.isDefault && (
+                        <span className="flex items-center gap-0.5 text-orange-400 text-xs">
+                          <Star size={10} fill="currentColor" /> پیش‌فرض
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {!k.isDefault && (
+                        <button
+                          onClick={() => api.patch(`/ai/admin/config/${k.provider}/default`)
+                            .then(() => reload()).catch(() => {})}
+                          className="text-xs text-label hover:text-orange-400 px-2 py-1 rounded"
+                          title="تنظیم به‌عنوان پیش‌فرض"
+                        >
+                          <Star size={12} />
+                        </button>
+                      )}
+                      <button
+                        onClick={() => handleDelete(k.provider)}
+                        disabled={deleting === k.provider}
+                        className="text-danger/60 hover:text-danger p-1.5 rounded hover:bg-danger/10 disabled:opacity-40"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Add / update key */}
+          <div className="flex flex-col gap-2">
+            <label className="text-label text-xs">پروایدر جدید یا به‌روزرسانی کلید</label>
+            <select
+              value={selProvider}
+              onChange={e => setSelProvider(e.target.value)}
+              className="w-full bg-bg border border-border rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-orange-500"
+            >
+              {Object.entries(PROVIDER_NAMES).map(([id, info]) => (
+                <option key={id} value={id}>{info.icon} {info.name}</option>
+              ))}
+            </select>
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <input
+                  type={showKey ? 'text' : 'password'}
+                  value={apiKey}
+                  onChange={e => setApiKey(e.target.value)}
+                  placeholder="کلید API"
+                  dir="ltr"
+                  className="w-full bg-bg border border-border rounded-lg px-3 py-2.5 text-white placeholder-label text-sm focus:outline-none focus:border-orange-500 pl-10"
+                />
+                <button onClick={() => setShowKey(s => !s)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-label">
+                  {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
+                </button>
+              </div>
+              <button
+                onClick={handleSave}
+                disabled={saving || !apiKey.trim()}
+                className="bg-orange-500 hover:bg-orange-600 disabled:opacity-40 text-white px-4 py-2.5 rounded-lg text-sm font-medium flex items-center gap-1"
+              >
+                {saving ? '...' : <><Key size={14} /> ذخیره</>}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 
 export default function ApiSettings() {
   const isAdmin = useAuthStore(s => s.isAdmin());
@@ -163,6 +330,9 @@ export default function ApiSettings() {
           {toast}
         </div>
       )}
+
+      {/* ── Admin global AI config ────────────────────────────────────────── */}
+      {isAdmin && <AdminAIConfigPanel onToast={showToast} />}
 
       {/* ── Built-in providers ────────────────────────────────────────────── */}
       <h2 className="text-white font-semibold text-sm mb-3">پروایدرهای اصلی</h2>

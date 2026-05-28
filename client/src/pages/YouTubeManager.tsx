@@ -309,8 +309,8 @@ function SwipeCard({ item, onApprove, onReject }: SwipeCardProps) {
     try {
       const { data } = await api.post('/ai/generate', {
         action: 'summarize',
-        content: item.title + (item.description ? '\n' + item.description.slice(0, 500) : ''),
-        lang: 'fa',
+        prompt: `خلاصه کوتاه به فارسی:\n${item.title}${item.description ? '\n' + item.description.slice(0, 500) : ''}`,
+        provider: 'gemini',
       });
       setAiSummary(data.result || data.content || 'خلاصه‌ای یافت نشد');
     } catch {
@@ -888,7 +888,7 @@ function AnalyticsTab() {
 توصیه‌ها باید عملی، کوتاه و به فارسی باشند.`;
 
     try {
-      const { data } = await api.post('/ai/summarize', { content: prompt, language: 'fa' });
+      const { data } = await api.post('/ai/generate', { action: 'summarize', prompt, provider: 'gemini' });
       setAiRec(data.result || data.content || 'پاسخی دریافت نشد');
     } catch {
       setAiRec('خطا در اتصال به هوش مصنوعی');

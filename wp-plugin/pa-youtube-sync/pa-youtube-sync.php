@@ -40,6 +40,7 @@ require_once PAYS_DIR . 'inc/member-rest-api.php';
 require_once PAYS_DIR . 'inc/rest-api.php';
 require_once PAYS_DIR . 'inc/admin.php';
 require_once PAYS_DIR . 'inc/ai-admin.php';
+require_once PAYS_DIR . 'inc/ai-global-config.php';
 require_once PAYS_DIR . 'inc/shortcodes.php';
 
 register_activation_hook(   __FILE__, 'pays_activate'   );

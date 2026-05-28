@@ -3,7 +3,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { authMiddleware, requireAdmin } from '../middleware/auth';
 import { login, getMe, refreshTokens, logout, loginWithTelegram } from '../auth/authController';
-import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey, listOpenRouterModels } from '../ai/aiController';
+import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey, listOpenRouterModels, getAdminAIConfig, setAdminAIConfig, deleteAdminAIConfig, setDefaultProvider, getAdminAIConfigForWP } from '../ai/aiController';
 import {
   listContent, getContent, createContent, updateContent,
   submitForReview, approveContent, rejectContent, deleteContent,
@@ -51,6 +51,13 @@ router.post('/ai/keys',             authMiddleware, saveUserKey);
 router.delete('/ai/keys/:provider', authMiddleware, deleteUserKey);
 router.post('/ai/test',             authMiddleware, testUserKey);
 router.get('/ai/openrouter-models', authMiddleware, listOpenRouterModels);
+
+// ── AI admin: global key management ──────────────────────────────────────────
+router.get   ('/ai/admin/config',                    authMiddleware, requireAdmin, getAdminAIConfig);
+router.post  ('/ai/admin/config',                    authMiddleware, requireAdmin, setAdminAIConfig);
+router.delete('/ai/admin/config/:provider',          authMiddleware, requireAdmin, deleteAdminAIConfig);
+router.patch ('/ai/admin/config/:provider/default',  authMiddleware, requireAdmin, setDefaultProvider);
+router.get   ('/ai/admin/config/wp-export',          getAdminAIConfigForWP);
 
 // ── AI (async job queue) ──────────────────────────────────────────────────────
 router.post('/ai/job',      authMiddleware, postJob);
