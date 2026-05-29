@@ -135,7 +135,13 @@ export async function login(req: Request, res: Response) {
           if (meRes.data?.name) wpUser.name = meRes.data.name;
         } catch { /* fall through */ }
       }
-      role = roles.includes('administrator') ? 'admin' : 'editor';
+      if (roles.includes('administrator')) role = 'admin';
+      else if (roles.includes('editor') || roles.includes('author') || roles.includes('contributor')) role = 'editor';
+      else {
+        // subscriber یا نقش‌های پایین‌تر — دسترسی به مینی‌اپ ندارند
+        await dbLog('warn', 'auth', 'Login blocked: insufficient role', { username, roles });
+        return res.status(403).json({ error: 'دسترسی به این بخش برای حساب شما مجاز نیست.' });
+      }
     }
 
     if (!wpUser) {
@@ -147,7 +153,13 @@ export async function login(req: Request, res: Response) {
           timeout: 8000,
         });
         wpUser = meRes.data;
-        role   = meRes.data.roles?.includes('administrator') ? 'admin' : 'editor';
+        const wpRoles: string[] = meRes.data.roles ?? [];
+        if (wpRoles.includes('administrator')) role = 'admin';
+        else if (wpRoles.includes('editor') || wpRoles.includes('author') || wpRoles.includes('contributor')) role = 'editor';
+        else {
+          await dbLog('warn', 'auth', 'Login blocked: insufficient role', { username, roles: wpRoles });
+          return res.status(403).json({ error: 'دسترسی به این بخش برای حساب شما مجاز نیست.' });
+        }
       } catch {
         await dbLog('warn', 'auth', 'Login failed', { username });
         return res.status(401).json({ error: 'نام کاربری یا رمز عبور اشتباه است' });
