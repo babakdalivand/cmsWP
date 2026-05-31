@@ -30,7 +30,7 @@ import {
   importChannelShorts,
 } from '../youtube/ytController';
 import { query } from '../db/pool';
-import { getDriveBooks, fetchBookInfo, publishBook, downloadBook } from '../books/booksController';
+import { getDriveBooks, fetchBookInfo, publishBook, downloadBook, getDraftBooks, approveBook, deleteBookDraft } from '../books/booksController';
 import {
   getLevels, getPlans, checkPostAccess, getMySubscription, getAccessToken,
   startPayment, adminListSubscriptions, adminGrantSubscription,
@@ -364,9 +364,12 @@ router.post  ('/storage/site-key',            authMiddleware, requireAdmin, cmmS
 router.get   ('/storage/test',                authMiddleware, requireAdmin, cmmTestConnection);
 
 // ── Books ─────────────────────────────────────────────────────────────────────
-router.get   ('/books/list',          authMiddleware, getDriveBooks);
-router.get   ('/books/info',          authMiddleware, fetchBookInfo);
-router.post  ('/books/publish',       authMiddleware, publishBook);
-router.get   ('/books/download/:fileId',              downloadBook);  // public (no auth)
+router.get   ('/books/list',              authMiddleware, getDriveBooks);
+router.get   ('/books/info',              authMiddleware, fetchBookInfo);
+router.post  ('/books/publish',           authMiddleware, publishBook);
+router.get   ('/books/drafts',            authMiddleware, requireAdmin, getDraftBooks);
+router.post  ('/books/approve/:id',       authMiddleware, requireAdmin, approveBook);
+router.delete('/books/draft/:id',         authMiddleware, requireAdmin, deleteBookDraft);
+router.get   ('/books/download/:fileId',                 downloadBook);  // public (no auth)
 
 export default router;

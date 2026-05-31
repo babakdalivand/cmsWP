@@ -1,10 +1,13 @@
-import { useState, useMemo } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
+import { useState, useMemo, useEffect, useRef } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   BookOpen, Search, ChevronDown, ChevronUp, Sparkles,
-  Upload, X, CheckCircle2, Loader2, ExternalLink, Download,
+  Upload, X, CheckCircle2, Loader2, ExternalLink, Download, BrainCircuit,
+  Clock, Check, Trash2,
 } from 'lucide-react';
 import { api } from '../api/client';
+import { usePostAIJob, useAIJob } from '../hooks/useQueries';
+import { useAuthStore } from '../store/authStore';
 
 // ── Types ──────────────────────────────────────────────────────────────────────
 
@@ -52,6 +55,33 @@ function usePublishBook() {
   });
 }
 
+interface DraftBook { id: number; title: string; author: string; date: string; postUrl: string; }
+
+function useDraftBooks(enabled: boolean) {
+  return useQuery<{ drafts: DraftBook[] }>({
+    queryKey: ['books', 'drafts'],
+    queryFn:  () => api.get('/books/drafts').then(r => r.data),
+    enabled,
+    staleTime: 30_000,
+  });
+}
+
+function useApproveBook() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.post(`/books/approve/${id}`).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['books', 'drafts'] }),
+  });
+}
+
+function useDeleteDraft() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => api.delete(`/books/draft/${id}`).then(r => r.data),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['books', 'drafts'] }),
+  });
+}
+
 // ── Helper: clean filename ─────────────────────────────────────────────────────
 
 function cleanTitle(fileName: string): string {
@@ -60,7 +90,7 @@ function cleanTitle(fileName: string): string {
 
 // ── Component: Book form sheet ─────────────────────────────────────────────────
 
-function BookSheet({ book, onClose }: { book: BookEntry; onClose: () => void }) {
+function BookSheet({ book, onClose, defaultStatus = 'draft' }: { book: BookEntry; onClose: () => void; defaultStatus?: 'publish' | 'draft' }) {
   const fetchInfo    = useFetchBookInfo();
   const publishBook  = usePublishBook();
 
@@ -72,8 +102,45 @@ function BookSheet({ book, onClose }: { book: BookEntry; onClose: () => void }) 
   const [isbn,        setIsbn]        = useState('');
   const [pageCount,   setPageCount]   = useState('');
   const [coverUrl,    setCoverUrl]    = useState('');
-  const [postStatus,  setPostStatus]  = useState<'publish' | 'draft'>('draft');
+  const [postStatus,  setPostStatus]  = useState<'publish' | 'draft'>(defaultStatus);
   const [result,      setResult]      = useState<{ postUrl: string; message: string } | null>(null);
+  const [aiJobId,     setAiJobId]     = useState<string | null>(null);
+  const postAIJob = usePostAIJob();
+  const aiJob     = useAIJob(aiJobId);
+
+  // When AI job finishes, fill description
+  const prevJobStatus = useRef<string | null>(null);
+  useEffect(() => {
+    const status = aiJob.data?.status;
+    if (status === prevJobStatus.current) return;
+    prevJobStatus.current = status ?? null;
+    if (status === 'completed' && aiJob.data?.result) {
+      setDescription(aiJob.data.result.trim());
+      setAiJobId(null);
+    }
+  }, [aiJob.data]);
+
+  async function handleAIDescription() {
+    const prompt = `یک معرفی کوتاه و جذاب به فارسی (۲ تا ۳ پاراگراف) برای کتاب «${title}»${author ? ` نوشته ${author}` : ''} بنویس. این معرفی برای انتشار در سایت استفاده می‌شود. فقط متن معرفی را بنویس بدون عنوان یا توضیح اضافه.`;
+    const job = await postAIJob.mutateAsync({ provider: 'gemini', action: 'generate', prompt });
+    setAiJobId(job.jobId);
+  }
+
+  // Auto-fetch info + cover when sheet opens
+  useEffect(() => {
+    const q = [cleanTitle(book.fileName), book.author].filter(Boolean).join(' ');
+    fetchInfo.mutateAsync(q).then(info => {
+      if (info.title)         setTitle(info.title);
+      if (info.authors?.[0])  setAuthor(info.authors.join(', '));
+      if (info.description)   setDescription(info.description);
+      if (info.publishedDate) setYear(info.publishedDate.slice(0, 4));
+      if (info.publisher)     setPublisher(info.publisher);
+      if (info.isbn)          setIsbn(info.isbn);
+      if (info.pageCount)     setPageCount(String(info.pageCount));
+      if (info.coverUrl)      setCoverUrl(info.coverUrl);
+    }).catch(() => {/* silent fail */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function handleFetchInfo() {
     const q = [title, author].filter(Boolean).join(' ');
@@ -160,16 +227,16 @@ function BookSheet({ book, onClose }: { book: BookEntry; onClose: () => void }) 
           </div>
         ) : (
           <div className="px-5 pt-1 space-y-4">
-            {/* Auto-fetch */}
+            {/* Auto-fetch / Re-fetch button */}
             <button
               onClick={handleFetchInfo}
               disabled={fetchInfo.isPending}
-              className="w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-opacity"
+              className="w-full py-2.5 rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
               style={{ background: 'rgba(79,184,180,0.12)', color: 'var(--primary)', border: '1px solid rgba(79,184,180,0.3)' }}
             >
               {fetchInfo.isPending ? <Loader2 size={15} className="animate-spin" /> : <Sparkles size={15} />}
-              دریافت اطلاعات از اینترنت
-              {fetchInfo.data?.source && (
+              {fetchInfo.isPending ? 'در حال جستجو...' : 'جستجوی مجدد از اینترنت'}
+              {fetchInfo.data?.source && !fetchInfo.isPending && (
                 <span className="text-[10px] opacity-70">({fetchInfo.data.source})</span>
               )}
             </button>
@@ -226,7 +293,22 @@ function BookSheet({ book, onClose }: { book: BookEntry; onClose: () => void }) 
 
             {/* Description */}
             <div>
-              <label className="text-[11px] font-bold mb-1 block" style={{ color: 'var(--label)' }}>معرفی کتاب</label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-[11px] font-bold" style={{ color: 'var(--label)' }}>معرفی کتاب</label>
+                <button
+                  onClick={handleAIDescription}
+                  disabled={postAIJob.isPending || !!aiJobId}
+                  className="flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-bold transition-opacity disabled:opacity-50"
+                  style={{ background: 'rgba(139,92,246,0.12)', color: '#a78bfa', border: '1px solid rgba(139,92,246,0.25)' }}
+                >
+                  {(postAIJob.isPending || aiJobId) ? (
+                    <Loader2 size={11} className="animate-spin" />
+                  ) : (
+                    <BrainCircuit size={11} />
+                  )}
+                  {aiJobId ? 'AI در حال نوشتن...' : 'نوشتن با AI'}
+                </button>
+              </div>
               <textarea
                 className={inputCls}
                 style={{ ...inputStyle, resize: 'none' }}
@@ -319,9 +401,14 @@ function BookSheet({ book, onClose }: { book: BookEntry; onClose: () => void }) 
 
 export default function Books() {
   const { data, isLoading, isError, refetch } = useDriveBooks();
+  const isAdmin    = useAuthStore(s => s.isAdmin());
+  const draftsQ    = useDraftBooks(isAdmin);
+  const approve    = useApproveBook();
+  const deleteDraft = useDeleteDraft();
   const [search,       setSearch]       = useState('');
   const [selectedBook, setSelectedBook] = useState<BookEntry | null>(null);
   const [collapsed,    setCollapsed]    = useState<Set<string>>(new Set());
+  const [draftsOpen,   setDraftsOpen]   = useState(true);
 
   const books = data?.books || [];
 
@@ -385,6 +472,64 @@ export default function Books() {
 
       {/* Content */}
       <div className="px-4 pt-3 space-y-2">
+
+        {/* ── Admin: Pending drafts ── */}
+        {isAdmin && (draftsQ.data?.drafts?.length ?? 0) > 0 && (
+          <div className="rounded-2xl overflow-hidden" style={{ border: '1px solid rgba(251,146,60,0.4)', background: 'rgba(251,146,60,0.06)' }}>
+            <button
+              className="w-full flex items-center justify-between px-4 py-3"
+              onClick={() => setDraftsOpen(o => !o)}
+            >
+              <div className="flex items-center gap-2">
+                <Clock size={15} style={{ color: '#fb923c' }} />
+                <span className="text-sm font-black" style={{ color: '#fb923c' }}>
+                  پیش‌نویس‌های در انتظار
+                </span>
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full" style={{ background: 'rgba(251,146,60,0.2)', color: '#fb923c' }}>
+                  {draftsQ.data!.drafts.length}
+                </span>
+              </div>
+              {draftsOpen
+                ? <ChevronUp size={15} style={{ color: '#fb923c' }} />
+                : <ChevronDown size={15} style={{ color: '#fb923c' }} />}
+            </button>
+            {draftsOpen && (
+              <div style={{ borderTop: '1px solid rgba(251,146,60,0.3)' }}>
+                {draftsQ.data!.drafts.map((d, idx) => (
+                  <div
+                    key={d.id}
+                    className="flex items-center gap-3 px-4 py-3"
+                    style={{ background: 'var(--bg)', borderTop: idx > 0 ? '1px solid var(--border)' : undefined }}
+                  >
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold truncate" style={{ color: 'var(--text)' }}>{d.title}</p>
+                      {d.author && <p className="text-[10px]" style={{ color: 'var(--label)' }}>{d.author}</p>}
+                    </div>
+                    <button
+                      onClick={() => approve.mutate(d.id)}
+                      disabled={approve.isPending}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-opacity disabled:opacity-50"
+                      style={{ background: 'rgba(34,197,94,0.12)', color: '#22c55e', border: '1px solid rgba(34,197,94,0.3)' }}
+                    >
+                      {approve.isPending ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
+                      تأیید
+                    </button>
+                    <button
+                      onClick={() => deleteDraft.mutate(d.id)}
+                      disabled={deleteDraft.isPending}
+                      className="flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-opacity disabled:opacity-50"
+                      style={{ background: 'rgba(239,68,68,0.1)', color: '#ef4444', border: '1px solid rgba(239,68,68,0.25)' }}
+                    >
+                      {deleteDraft.isPending ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+                      حذف
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {isLoading && (
           <div className="flex flex-col items-center gap-3 py-16">
             <Loader2 size={32} className="animate-spin" style={{ color: 'var(--primary)' }} />
@@ -474,7 +619,11 @@ export default function Books() {
 
       {/* Book detail sheet */}
       {selectedBook && (
-        <BookSheet book={selectedBook} onClose={() => setSelectedBook(null)} />
+        <BookSheet
+          book={selectedBook}
+          onClose={() => setSelectedBook(null)}
+          defaultStatus={isAdmin ? 'publish' : 'draft'}
+        />
       )}
     </div>
   );
