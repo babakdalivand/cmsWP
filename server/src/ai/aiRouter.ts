@@ -148,6 +148,57 @@ export async function runAI(
   return { result, usedOwnKey };
 }
 
+export async function runImageGeneration(
+  userId: number,
+  prompt: string,
+): Promise<{ imageBase64: string; mimeType: string }> {
+  const stored = await getUserKey(userId, 'gemini');
+  let apiKey = stored?.key ?? null;
+
+  if (!apiKey) {
+    if (!(await checkQuota(userId))) {
+      throw new Error(`سهمیه روزانه AI شما تمام شده. کلید Gemini شخصی خود را در تنظیمات وارد کنید.`);
+    }
+    apiKey = (config.ai.masterKeys as any)['gemini'];
+    if (!apiKey) throw new Error('کلید master برای Gemini تنظیم نشده');
+  }
+
+  // Try Imagen 3.0 (best quality)
+  try {
+    const res = await axios.post(
+      `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-001:predict?key=${apiKey}`,
+      { instances: [{ prompt }], parameters: { sampleCount: 1, aspectRatio: '16:9' } },
+      { timeout: 60000 },
+    );
+    const pred = res.data?.predictions?.[0];
+    if (pred?.bytesBase64Encoded) {
+      await query('INSERT INTO ai_usage (user_id, provider, model, action, used_own_key) VALUES (?,?,?,?,?)',
+        [userId, 'gemini', 'imagen-3.0-generate-001', 'image-generate', stored ? 1 : 0]);
+      return { imageBase64: pred.bytesBase64Encoded, mimeType: pred.mimeType || 'image/png' };
+    }
+  } catch { /* fall through */ }
+
+  // Fallback: gemini-2.0-flash-exp-image-generation
+  const res2 = await axios.post(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp-image-generation:generateContent?key=${apiKey}`,
+    {
+      contents: [{ parts: [{ text: prompt }] }],
+      generationConfig: { responseModalities: ['TEXT', 'IMAGE'] },
+    },
+    { timeout: 60000 },
+  );
+  const parts = res2.data?.candidates?.[0]?.content?.parts || [];
+  for (const part of parts) {
+    if (part.inlineData?.data) {
+      await query('INSERT INTO ai_usage (user_id, provider, model, action, used_own_key) VALUES (?,?,?,?,?)',
+        [userId, 'gemini', 'gemini-2.0-flash-exp-image-generation', 'image-generate', stored ? 1 : 0]);
+      return { imageBase64: part.inlineData.data, mimeType: part.inlineData.mimeType || 'image/png' };
+    }
+  }
+
+  throw new Error('تصویری تولید نشد. لطفاً پرامپت دیگری امتحان کنید.');
+}
+
 export async function getQuotaStatus(userId: number) {
   const today = new Date().toISOString().slice(0, 10);
   const rows = await query<{ count: string }>(

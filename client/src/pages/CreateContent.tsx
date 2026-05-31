@@ -6,7 +6,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import {
   useCreateContent, useSubmitContent, usePostAIJob, useAIJob, useUploadMedia,
-  useWPCategories,
+  useWPCategories, useGenerateImage,
 } from '../hooks/useQueries';
 import RichTextEditor from '../components/ui/RichTextEditor';
 
@@ -43,11 +43,16 @@ export default function CreateContent() {
     content_fa: '', content_en: '',
     youtube_url: '', podcast_url: '',
   });
-  const [featured, setFeatured] = useState<MediaInfo | null>(null);  // featured image (always available)
-  const [mediaFile, setMediaFile] = useState<MediaInfo | null>(null); // file for 'media' type
+  const [featured, setFeatured] = useState<MediaInfo | null>(null);
+  const [mediaFile, setMediaFile] = useState<MediaInfo | null>(null);
   const [categoryIds, setCategoryIds] = useState<number[]>([]);
   const [scheduledAt, setScheduledAt] = useState('');
   const [error, setError] = useState('');
+
+  // AI image generation state
+  const [aiImgPanel, setAiImgPanel]   = useState(false);
+  const [aiImgPrompt, setAiImgPrompt] = useState('');
+  const [aiImgPreview, setAiImgPreview] = useState<{ base64: string; mime: string } | null>(null);
 
   // Categories
   const { data: categories = [] } = useWPCategories();
@@ -55,10 +60,11 @@ export default function CreateContent() {
   // ── AI job ───────────────────────────────────────────────────────────────
   const [aiJob, setAiJob] = useState<{ jobId: string; targetField: string } | null>(null);
 
-  const createMut   = useCreateContent();
-  const submitMut   = useSubmitContent();
-  const postJobMut  = usePostAIJob();
-  const uploadMut   = useUploadMedia();
+  const createMut    = useCreateContent();
+  const submitMut    = useSubmitContent();
+  const postJobMut   = usePostAIJob();
+  const uploadMut    = useUploadMedia();
+  const genImgMut    = useGenerateImage();
   const { data: jobData } = useAIJob(aiJob?.jobId ?? null);
 
   // ── File input refs ─────────────────────────────────────────────────────
@@ -150,6 +156,38 @@ export default function CreateContent() {
     }
   }
 
+  // ── AI Image ────────────────────────────────────────────────────────────
+  async function handleAiGenerate() {
+    setError('');
+    setAiImgPreview(null);
+    try {
+      const res = await genImgMut.mutateAsync({
+        prompt: aiImgPrompt.trim() || undefined,
+        title: form.title_fa || form.title_en || undefined,
+        content_type: type,
+      });
+      setAiImgPreview({ base64: res.imageBase64, mime: res.mimeType });
+      if (!aiImgPrompt.trim()) setAiImgPrompt(res.prompt);
+    } catch (e: any) {
+      setError(e.response?.data?.error || 'خطا در تولید تصویر');
+    }
+  }
+
+  async function handleAiImageConfirm() {
+    if (!aiImgPreview) return;
+    setError('');
+    try {
+      const blob = await fetch(`data:${aiImgPreview.mime};base64,${aiImgPreview.base64}`).then(r => r.blob());
+      const file = new File([blob], 'ai-generated.png', { type: aiImgPreview.mime });
+      const result = await uploadMut.mutateAsync(file);
+      setFeatured({ id: result.id, url: result.source_url, type: result.mime_type || aiImgPreview.mime, filename: result.title?.rendered || 'ai-generated.png' });
+      setAiImgPanel(false);
+      setAiImgPreview(null);
+    } catch (e: any) {
+      setError(e.response?.data?.error || e.response?.data?.message || 'خطا در آپلود تصویر');
+    }
+  }
+
   // ── Submit ──────────────────────────────────────────────────────────────
   async function handleSubmit(asDraft = true) {
     setError('');
@@ -204,23 +242,79 @@ export default function CreateContent() {
           onChange={(e) => uploadAndSet(e, setFeatured, featuredInputRef)}
           className="hidden"
         />
-        {!featured ? (
-          <button
-            type="button"
-            onClick={() => featuredInputRef.current?.click()}
-            disabled={uploadMut.isPending}
-            className="w-full border-2 border-dashed border-border rounded-2xl p-8 flex flex-col items-center gap-2 text-label hover:text-blue hover:border-blue/40 transition-colors disabled:opacity-50"
-          >
-            {uploadMut.isPending ? (
-              <><span className="animate-spin text-2xl">⟳</span><span className="text-sm">در حال آپلود...</span></>
-            ) : (
-              <>
-                <ImageIcon size={32} strokeWidth={1.5} />
-                <span className="text-sm font-medium">انتخاب تصویر شاخص</span>
-                <span className="text-xs opacity-70">حداکثر 20 MB</span>
-              </>
+        {/* AI Image Panel */}
+        {aiImgPanel && (
+          <div className="mb-3 bg-bg border border-blue/30 rounded-2xl p-4">
+            <p className="text-text text-sm font-medium mb-2">🤖 تولید تصویر با هوش مصنوعی</p>
+            <textarea
+              value={aiImgPrompt}
+              onChange={e => setAiImgPrompt(e.target.value)}
+              placeholder={`توضیح تصویر به انگلیسی یا فارسی... (اختیاری — در صورت خالی بودن بر اساس عنوان «${form.title_fa || form.title_en || 'پست'}» ساخته می‌شود)`}
+              dir="auto"
+              rows={3}
+              className="w-full bg-surface border border-border rounded-xl px-3 py-2.5 text-text text-sm placeholder-label focus:outline-none focus:border-blue resize-none mb-3"
+            />
+            {aiImgPreview && (
+              <img
+                src={`data:${aiImgPreview.mime};base64,${aiImgPreview.base64}`}
+                alt="AI preview"
+                className="w-full rounded-xl mb-3 border border-border"
+              />
             )}
-          </button>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={handleAiGenerate}
+                disabled={genImgMut.isPending || uploadMut.isPending}
+                className="flex-1 bg-blue text-white py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {genImgMut.isPending ? <><span className="animate-spin">⟳</span> در حال تولید...</> : <><Sparkles size={14} /> تولید تصویر</>}
+              </button>
+              {aiImgPreview && (
+                <button
+                  type="button"
+                  onClick={handleAiImageConfirm}
+                  disabled={uploadMut.isPending}
+                  className="flex-1 bg-success/20 border border-success/40 text-success py-2.5 rounded-xl text-sm font-medium disabled:opacity-50"
+                >
+                  {uploadMut.isPending ? 'آپلود...' : '✓ استفاده از این تصویر'}
+                </button>
+              )}
+              <button type="button" onClick={() => { setAiImgPanel(false); setAiImgPreview(null); }}
+                className="p-2.5 bg-surface border border-border rounded-xl text-label hover:text-danger">
+                <X size={16} />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {!featured ? (
+          <div className="flex flex-col gap-2">
+            <button
+              type="button"
+              onClick={() => featuredInputRef.current?.click()}
+              disabled={uploadMut.isPending}
+              className="w-full border-2 border-dashed border-border rounded-2xl p-6 flex flex-col items-center gap-2 text-label hover:text-blue hover:border-blue/40 transition-colors disabled:opacity-50"
+            >
+              {uploadMut.isPending ? (
+                <><span className="animate-spin text-2xl">⟳</span><span className="text-sm">در حال آپلود...</span></>
+              ) : (
+                <>
+                  <ImageIcon size={28} strokeWidth={1.5} />
+                  <span className="text-sm font-medium">انتخاب از دستگاه</span>
+                  <span className="text-xs opacity-70">حداکثر 20 MB</span>
+                </>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => setAiImgPanel(v => !v)}
+              className="w-full flex items-center justify-center gap-2 py-2.5 border border-blue/30 rounded-xl text-blue text-sm hover:bg-blue/10 transition-colors"
+            >
+              <Sparkles size={15} />
+              تولید تصویر با هوش مصنوعی (Gemini)
+            </button>
+          </div>
         ) : (
           <div className="relative rounded-2xl overflow-hidden border border-border bg-bg">
             <img src={featured.url} alt={featured.filename} className="w-full max-h-72 object-cover" />

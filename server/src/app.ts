@@ -36,9 +36,9 @@ app.use((req, res, next) => {
 });
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
-app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 200, standardHeaders: true, legacyHeaders: false }));
-app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: { error: 'تعداد تلاش بیش از حد مجاز' } }));
-app.use('/api/ai/generate', rateLimit({ windowMs: 60 * 1000, max: 10, message: { error: 'بیش از حد درخواست AI ارسال کردید' } }));
+app.use('/api', rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
+app.use('/api/auth/login', rateLimit({ windowMs: 15 * 60 * 1000, max: 20, message: { error: 'تعداد تلاش بیش از حد مجاز' } }));
+app.use('/api/ai/generate', rateLimit({ windowMs: 60 * 1000, max: 20, message: { error: 'بیش از حد درخواست AI ارسال کردید' } }));
 
 // ── Body parsing ──────────────────────────────────────────────────────────────
 app.use(express.json({ limit: '10mb' }));

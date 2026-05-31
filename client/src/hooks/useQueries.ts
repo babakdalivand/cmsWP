@@ -114,6 +114,13 @@ export function useAIJob(jobId: string | null) {
   });
 }
 
+export function useGenerateImage() {
+  return useMutation({
+    mutationFn: (payload: { prompt?: string; title?: string; content_type?: string }) =>
+      api.post('/ai/generate-image', payload).then(r => r.data as { imageBase64: string; mimeType: string; prompt: string }),
+  });
+}
+
 // ── AI keys ───────────────────────────────────────────────────────────────────
 export function useAIKeys() {
   return useQuery({

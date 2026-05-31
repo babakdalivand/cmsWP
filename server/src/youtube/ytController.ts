@@ -8,9 +8,14 @@ async function ytApi(method: string, path: string, data?: any) {
   return wpRequest(method, path, data, undefined, YT_BASE);
 }
 
+function ytErr(res: Response, e: any) {
+  const status = e?.response?.status || 500;
+  res.status(status).json({ error: e.message });
+}
+
 export async function listChannels(_req: Request, res: Response) {
   try { res.json(await ytApi('GET', '/channels')); }
-  catch (e: any) { res.status(500).json({ error: e.message }); }
+  catch (e: any) { ytErr(res, e); }
 }
 
 export async function addChannel(req: Request, res: Response) {
@@ -21,21 +26,21 @@ export async function addChannel(req: Request, res: Response) {
       max_videos:    req.body.max_videos  || 20,
     });
     res.status(201).json(result);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function updateChannel(req: Request, res: Response) {
   try {
     const result = await ytApi('PATCH', `/channels/${req.params.id}`, req.body);
     res.json(result);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function deleteChannel(req: Request, res: Response) {
   try {
     await ytApi('DELETE', `/channels/${req.params.id}`);
     res.status(204).end();
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function listQueue(req: Request, res: Response) {
@@ -48,7 +53,7 @@ export async function listQueue(req: Request, res: Response) {
     }).toString();
     const result = await ytApi('GET', `/queue?${qs}`);
     res.json(result);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function approveVideo(req: Request, res: Response) {
@@ -57,7 +62,7 @@ export async function approveVideo(req: Request, res: Response) {
     const result = await ytApi('POST', `/queue/${req.params.id}/approve`, req.body);
     await dbLog('info', 'youtube', 'Video approved', { adminId, queueId: req.params.id, ...result });
     res.json(result);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function rejectVideo(req: Request, res: Response) {
@@ -66,12 +71,12 @@ export async function rejectVideo(req: Request, res: Response) {
     await ytApi('POST', `/queue/${req.params.id}/reject`);
     await dbLog('info', 'youtube', 'Video rejected', { adminId, queueId: req.params.id });
     res.status(204).end();
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function listPlaylists(req: Request, res: Response) {
   try { res.json(await ytApi('GET', `/channels/${req.params.id}/playlists`)); }
-  catch (e: any) { res.status(500).json({ error: e.message }); }
+  catch (e: any) { ytErr(res, e); }
 }
 
 export async function importPlaylist(req: Request, res: Response) {
@@ -81,48 +86,48 @@ export async function importPlaylist(req: Request, res: Response) {
       max:        req.body.max || 50,
     });
     res.json(result);
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function getAnalytics(req: Request, res: Response) {
   try {
     const { limit = 20 } = req.query;
     res.json(await ytApi('GET', `/analytics?limit=${limit}`));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function runSync(_req: Request, res: Response) {
   try { res.json(await ytApi('POST', '/sync')); }
-  catch (e: any) { res.status(500).json({ error: e.message }); }
+  catch (e: any) { ytErr(res, e); }
 }
 
 export async function getSettings(_req: Request, res: Response) {
   try { res.json(await ytApi('GET', '/settings')); }
-  catch (e: any) { res.status(500).json({ error: e.message }); }
+  catch (e: any) { ytErr(res, e); }
 }
 
 export async function saveSettings(req: Request, res: Response) {
   try { res.json(await ytApi('PATCH', '/settings', req.body)); }
-  catch (e: any) { res.status(500).json({ error: e.message }); }
+  catch (e: any) { ytErr(res, e); }
 }
 
 export async function reclassifyQueue(_req: Request, res: Response) {
   try { res.json(await ytApi('POST', '/queue/reclassify')); }
-  catch (e: any) { res.status(500).json({ error: e.message }); }
+  catch (e: any) { ytErr(res, e); }
 }
 
 export async function importChannelShorts(req: Request, res: Response) {
   const { id } = req.params;
   const max = Math.min(parseInt(req.query.max as string || '500'), 2000);
   try { res.json(await ytApi('POST', `/channels/${id}/import-shorts?max=${max}`)); }
-  catch (e: any) { res.status(500).json({ error: e.message }); }
+  catch (e: any) { ytErr(res, e); }
 }
 
 export async function getLiveStats(req: Request, res: Response) {
   try {
     const channel_id = req.query.channel_id as string || '';
     res.json(await ytApi('GET', `/youtube/live-stats${channel_id ? '?channel_id=' + channel_id : ''}`));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function getAdvancedAnalytics(req: Request, res: Response) {
@@ -130,7 +135,7 @@ export async function getAdvancedAnalytics(req: Request, res: Response) {
     const { channel_id = '' } = req.query;
     const qs = channel_id ? `?channel_id=${encodeURIComponent(String(channel_id))}` : '';
     res.json(await ytApi('GET', `/analytics/advanced${qs}`));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function getAnalyticsTrends(req: Request, res: Response) {
@@ -138,7 +143,7 @@ export async function getAnalyticsTrends(req: Request, res: Response) {
     const { channel_id = '', days = 30 } = req.query;
     const qs = new URLSearchParams({ ...(channel_id ? { channel_id: String(channel_id) } : {}), days: String(days) });
     res.json(await ytApi('GET', `/analytics/trends?${qs}`));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function getAnalyticsBestTimes(req: Request, res: Response) {
@@ -146,7 +151,7 @@ export async function getAnalyticsBestTimes(req: Request, res: Response) {
     const { channel_id = '' } = req.query;
     const qs = channel_id ? `?channel_id=${encodeURIComponent(String(channel_id))}` : '';
     res.json(await ytApi('GET', `/analytics/best-times${qs}`));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function getAnalyticsReport(req: Request, res: Response) {
@@ -154,10 +159,10 @@ export async function getAnalyticsReport(req: Request, res: Response) {
     const { channel_id = '' } = req.query;
     const qs = channel_id ? `?channel_id=${encodeURIComponent(String(channel_id))}` : '';
     res.json(await ytApi('GET', `/analytics/report${qs}`));
-  } catch (e: any) { res.status(500).json({ error: e.message }); }
+  } catch (e: any) { ytErr(res, e); }
 }
 
 export async function triggerAnalyticsSnapshot(_req: Request, res: Response) {
   try { res.json(await ytApi('POST', '/analytics/snapshot')); }
-  catch (e: any) { res.status(500).json({ error: e.message }); }
+  catch (e: any) { ytErr(res, e); }
 }

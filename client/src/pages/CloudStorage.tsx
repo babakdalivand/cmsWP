@@ -64,7 +64,7 @@ function AddProviderSheet({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.6)' }} onClick={onClose}>
-      <div className="w-full max-h-[85vh] overflow-y-auto rounded-t-2xl p-5" style={{ background: 'var(--surface)' }} onClick={e => e.stopPropagation()}>
+      <div className="w-full max-h-[85vh] overflow-y-auto rounded-t-2xl p-5 pb-28" style={{ background: 'var(--surface)' }} onClick={e => e.stopPropagation()}>
         <div className="w-10 h-1 rounded-full mx-auto mb-4" style={{ background: 'var(--border)' }} />
         <h3 className="text-lg font-black mb-4" style={{ color: 'var(--text)' }}>افزودن Provider</h3>
 
@@ -77,7 +77,7 @@ function AddProviderSheet({ onClose }: { onClose: () => void }) {
               <button key={t} onClick={() => setType(t)}
                 className="py-2 rounded-xl text-[11px] font-bold transition-all"
                 style={{ background: type === t ? 'var(--primary)' : 'var(--bg)', color: type === t ? '#fff' : 'var(--label)', border: '1px solid var(--border)' }}>
-                {t.toUpperCase()}
+                {t === 'gdrive' ? 'DRIVE' : t.toUpperCase()}
               </button>
             ))}
           </div>

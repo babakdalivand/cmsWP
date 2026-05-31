@@ -3,7 +3,7 @@ import multer from 'multer';
 import sharp from 'sharp';
 import { authMiddleware, requireAdmin } from '../middleware/auth';
 import { login, getMe, refreshTokens, logout, loginWithTelegram } from '../auth/authController';
-import { generate, postJob, pollJob, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey, listOpenRouterModels, getAdminAIConfig, setAdminAIConfig, deleteAdminAIConfig, setDefaultProvider as setAIDefaultProvider, getAdminAIConfigForWP } from '../ai/aiController';
+import { generate, postJob, pollJob, generateImage, saveUserKey, getUserKeys, deleteUserKey, quota, testUserKey, listOpenRouterModels, getAdminAIConfig, setAdminAIConfig, deleteAdminAIConfig, setDefaultProvider as setAIDefaultProvider, getAdminAIConfigForWP } from '../ai/aiController';
 import {
   getStatus as cmmGetStatus, getProviders as cmmGetProviders, addProvider as cmmAddProvider,
   deleteProvider as cmmDeleteProvider, setDefaultProvider as cmmSetDefault,
@@ -52,6 +52,7 @@ router.get('/auth/me',        authMiddleware, getMe);
 
 // ── AI (sync) ──────────────────────────────────────────────────────────────────
 router.post('/ai/generate',         authMiddleware, generate);
+router.post('/ai/generate-image',   authMiddleware, generateImage);
 router.get('/ai/quota',             authMiddleware, quota);
 router.get('/ai/keys',              authMiddleware, getUserKeys);
 router.post('/ai/keys',             authMiddleware, saveUserKey);

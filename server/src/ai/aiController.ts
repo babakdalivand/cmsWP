@@ -1,6 +1,6 @@
 import axios from 'axios';
 import { Request, Response } from 'express';
-import { runAI, getQuotaStatus, AIProvider, AI_PROVIDER_LIST } from './aiRouter';
+import { runAI, getQuotaStatus, runImageGeneration, AIProvider, AI_PROVIDER_LIST } from './aiRouter';
 import { enqueueJob, getJobStatus, queueNameForAction } from './jobQueue';
 import { encrypt, decrypt } from './encryption';
 import { query, queryOne } from '../db/pool';
@@ -61,6 +61,33 @@ export async function pollJob(req: Request, res: Response) {
   const job    = await getJobStatus(req.params.id, userId);
   if (!job) return res.status(404).json({ error: 'کار یافت نشد' });
   return res.json(job);
+}
+
+// ── Image generation (Gemini Imagen) ─────────────────────────────────────────
+
+export async function generateImage(req: Request, res: Response) {
+  const userId = (req as any).user.userId;
+  const { prompt, title, content_type } = req.body;
+
+  const autoPrompt = [
+    'A professional, modern, high-quality blog cover image.',
+    'Clean, minimalist design, no text, no watermarks.',
+    content_type === 'podcast'
+      ? 'Podcast artwork style, dark background, microphone or sound waves motif.'
+      : content_type === 'youtube'
+      ? 'YouTube thumbnail style, bold and eye-catching.'
+      : 'Editorial illustration style suitable for a humanist/atheist publication.',
+    title ? `Topic: "${title}".` : '',
+  ].filter(Boolean).join(' ');
+
+  const finalPrompt = prompt?.trim() || autoPrompt;
+
+  try {
+    const result = await runImageGeneration(userId, finalPrompt);
+    return res.json({ ...result, prompt: finalPrompt });
+  } catch (err: any) {
+    return res.status(400).json({ error: err.message });
+  }
 }
 
 // ── BYOK key management ───────────────────────────────────────────────────────
