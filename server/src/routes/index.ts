@@ -30,6 +30,7 @@ import {
   importChannelShorts,
 } from '../youtube/ytController';
 import { query } from '../db/pool';
+import { getDriveBooks, fetchBookInfo, publishBook, downloadBook } from '../books/booksController';
 import {
   getLevels, getPlans, checkPostAccess, getMySubscription, getAccessToken,
   startPayment, adminListSubscriptions, adminGrantSubscription,
@@ -361,5 +362,11 @@ router.post  ('/storage/sync',                authMiddleware, requireAdmin, cmmT
 router.get   ('/storage/logs',                authMiddleware, requireAdmin, cmmGetLogs);
 router.post  ('/storage/site-key',            authMiddleware, requireAdmin, cmmSaveSiteKey);
 router.get   ('/storage/test',                authMiddleware, requireAdmin, cmmTestConnection);
+
+// ── Books ─────────────────────────────────────────────────────────────────────
+router.get   ('/books/list',          authMiddleware, getDriveBooks);
+router.get   ('/books/info',          authMiddleware, fetchBookInfo);
+router.post  ('/books/publish',       authMiddleware, publishBook);
+router.get   ('/books/download/:fileId',              downloadBook);  // public (no auth)
 
 export default router;

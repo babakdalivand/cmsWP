@@ -35,6 +35,8 @@ export const config = {
     url:        process.env.WP_URL         || '',
     apiUser:    process.env.WP_API_USER    || '',
     apiPassword:process.env.WP_API_PASSWORD|| '',
+    // Pre-derived key: sha256(AUTH_SALT + site_url)[:32], stored as hex
+    cmmKeyHex:  process.env.WP_CMM_KEY_HEX || '',
     dbHost:     process.env.WP_DB_HOST     || 'localhost',
     dbName:     process.env.WP_DB_NAME     || 'wordpress',
     dbUser:     process.env.WP_DB_USER     || 'root',

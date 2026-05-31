@@ -1,6 +1,6 @@
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { LayoutDashboard, FileText, Sparkles, Cloud, Youtube } from 'lucide-react';
+import { LayoutDashboard, FileText, Sparkles, BookOpen, Youtube } from 'lucide-react';
 import { api } from '../../api/client';
 
 interface Tab {
@@ -30,8 +30,8 @@ export default function BottomNav() {
     { path: '/',          icon: LayoutDashboard, label: 'داشبورد' },
     { path: '/wp-posts',  icon: FileText,        label: 'محتوا', match: ['/wp-posts', '/wp-edit', '/content'] },
     { path: '/create',    icon: Sparkles,        label: 'ایجاد' },
-    { path: '/youtube',       icon: Youtube, label: 'یوتیوب', badge: pendingCount },
-    { path: '/cloud-storage', icon: Cloud,   label: 'فضا' },
+    { path: '/youtube', icon: Youtube,   label: 'یوتیوب', badge: pendingCount },
+    { path: '/books',   icon: BookOpen,  label: 'کتاب‌ها' },
   ];
 
   return (
