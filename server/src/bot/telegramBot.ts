@@ -1,5 +1,8 @@
 import axios from 'axios';
 import { Request, Response } from 'express';
+import pdfParseMod from 'pdf-parse';
+const pdfParse: (buf: Buffer) => Promise<{ text: string }> =
+  (pdfParseMod as any).default ?? pdfParseMod;
 import { config } from '../config';
 import { getPosts, wpRequest, createPost, updatePost, deletePost, uploadMedia } from '../wp/wpProxy';
 import { query, queryOne, queryInsert } from '../db/pool';
@@ -217,6 +220,13 @@ async function handleMessage(msg: any) {
   }
 
   if (!auth) return promptLogin(chatId);
+
+  // Auto-translate Persian text to academic English
+  if (isPersian(text)) {
+    await handleTranslation(chatId, text);
+    return;
+  }
+
   await sendMessage(chatId, 'متوجه نشدم. /help برای راهنما.');
 }
 
@@ -580,6 +590,113 @@ async function handleCallback(query: any) {
   }
 }
 
+// ── Translation ───────────────────────────────────────────────────────────────
+
+function isPersian(text: string): boolean {
+  return /[؀-ۿ]/.test(text);
+}
+
+function splitIntoChunks(text: string, maxLen: number): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < text.length) {
+    let end = start + maxLen;
+    if (end < text.length) {
+      const lastPeriod = text.lastIndexOf('. ', end);
+      if (lastPeriod > start + maxLen / 2) end = lastPeriod + 1;
+    }
+    chunks.push(text.slice(start, end).trim());
+    start = end;
+  }
+  return chunks;
+}
+
+async function translateText(text: string): Promise<string> {
+  const apiKey = config.ai.masterKeys.claude;
+  if (!apiKey) throw new Error('کلید Claude API تنظیم نشده (ADMIN_CLAUDE_KEY)');
+
+  const prompt = `You are a professional academic translator specializing in Persian to English translation.
+Translate the following Persian text to formal, academic English suitable for scholarly publications and journalism.
+Use precise vocabulary, maintain the original meaning exactly, and write in a style appropriate for academic papers or quality newspapers.
+Output ONLY the English translation — no explanations, no notes, no prefixes.
+
+Persian text:
+${text}`;
+
+  const res = await axios.post('https://api.anthropic.com/v1/messages', {
+    model: 'claude-sonnet-4-6',
+    max_tokens: 4096,
+    messages: [{ role: 'user', content: prompt }],
+  }, {
+    headers: {
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json',
+    },
+    timeout: 60000,
+  });
+
+  return (res.data?.content?.[0]?.text || '').trim();
+}
+
+async function sendTranslation(chatId: number, translated: string, label = '') {
+  const header = label ? `📄 <b>${escapeHtml(label)}</b>\n\n` : '';
+  const chunks  = splitIntoChunks(translated, 3500);
+
+  for (let i = 0; i < chunks.length; i++) {
+    const prefix = i === 0
+      ? `${header}🇬🇧 <b>Academic Translation${chunks.length > 1 ? ` (${i + 1}/${chunks.length})` : ''}</b>\n\n`
+      : `<b>(${i + 1}/${chunks.length})</b>\n\n`;
+    await sendMessage(chatId, prefix + escapeHtml(chunks[i]));
+  }
+}
+
+async function handleTranslation(chatId: number, text: string, label = '') {
+  if (text.length < 10) return; // too short, ignore
+  await sendMessage(chatId, '🔄 در حال ترجمه...');
+  try {
+    const translated = await translateText(text);
+    await sendTranslation(chatId, translated, label);
+  } catch (err: any) {
+    await sendMessage(chatId, `❌ خطا در ترجمه: ${escapeHtml(err.message)}`);
+  }
+}
+
+async function handlePdfTranslation(chatId: number, fileId: string, fileName: string) {
+  await sendMessage(chatId, `📄 در حال استخراج متن از <b>${escapeHtml(fileName)}</b>...`);
+  try {
+    const { buffer } = await downloadTelegramFile(fileId);
+    const pdf  = await pdfParse(buffer);
+    const text = pdf.text.trim();
+    if (!text) {
+      await sendMessage(chatId, '⚠️ متنی در این PDF یافت نشد (احتمالاً اسکن‌شده است).');
+      return;
+    }
+    if (!isPersian(text)) {
+      await sendMessage(chatId, '⚠️ متن فارسی در این PDF تشخیص داده نشد.');
+      return;
+    }
+    await handleTranslation(chatId, text, fileName);
+  } catch (err: any) {
+    await sendMessage(chatId, `❌ خطا در خواندن PDF: ${escapeHtml(err.message)}`);
+  }
+}
+
+async function handleTextFileTranslation(chatId: number, fileId: string, fileName: string) {
+  await sendMessage(chatId, `📄 در حال خواندن <b>${escapeHtml(fileName)}</b>...`);
+  try {
+    const { buffer } = await downloadTelegramFile(fileId);
+    const text = buffer.toString('utf-8').trim();
+    if (!isPersian(text)) {
+      await sendMessage(chatId, '⚠️ متن فارسی در این فایل تشخیص داده نشد.');
+      return;
+    }
+    await handleTranslation(chatId, text, fileName);
+  } catch (err: any) {
+    await sendMessage(chatId, `❌ خطا در خواندن فایل: ${escapeHtml(err.message)}`);
+  }
+}
+
 // ── File upload ───────────────────────────────────────────────────────────────
 async function handleFileUpload(msg: any) {
   const chatId = msg.chat.id;
@@ -605,8 +722,22 @@ async function handleFileUpload(msg: any) {
     fallbackName = `voice_${Date.now()}.ogg`;
     kind = 'پیام صوتی';
   } else if (msg.document) {
+    const mime     = (msg.document.mime_type || '') as string;
+    const fname    = (msg.document.file_name || '') as string;
+    const isPdf    = mime === 'application/pdf' || fname.toLowerCase().endsWith('.pdf');
+    const isTxt    = mime === 'text/plain'      || fname.toLowerCase().endsWith('.txt');
+
+    if (isPdf) {
+      await handlePdfTranslation(chatId, msg.document.file_id, fname || 'document.pdf');
+      return;
+    }
+    if (isTxt) {
+      await handleTextFileTranslation(chatId, msg.document.file_id, fname || 'file.txt');
+      return;
+    }
+
     fileId = msg.document.file_id;
-    fallbackName = msg.document.file_name || `doc_${Date.now()}`;
+    fallbackName = fname || `doc_${Date.now()}`;
     kind = 'سند';
   } else {
     return;
