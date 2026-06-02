@@ -24,6 +24,7 @@ SERVER_FILES = {
     'server/dist/ai/encryption.js':             f'{NODEJS}/server/dist/ai/encryption.js',
     'server/dist/storage/storageController.js': f'{NODEJS}/server/dist/storage/storageController.js',
     'server/dist/routes/index.js':              f'{NODEJS}/server/dist/routes/index.js',
+    'server/dist/books/booksController.js':     f'{NODEJS}/server/dist/books/booksController.js',
 }
 
 def connect():

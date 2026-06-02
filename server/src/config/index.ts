@@ -47,6 +47,8 @@ export const config = {
     key: isProd ? required('ENCRYPTION_KEY') : optional('ENCRYPTION_KEY', 'dev_encryption_key_32chars_xxxxx!'),
   },
 
+  googleBooksApiKey: process.env.GOOGLE_BOOKS_API_KEY || '',
+
   ai: {
     dailyQuota: parseInt(process.env.DAILY_AI_QUOTA || '10'),
     masterKeys: {

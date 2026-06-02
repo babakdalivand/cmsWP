@@ -82,6 +82,18 @@ function useDeleteDraft() {
   });
 }
 
+function useUploadCover() {
+  return useMutation({
+    mutationFn: (file: File) => {
+      const fd = new FormData();
+      fd.append('cover', file);
+      return api.post<{ url: string }>('/books/upload-cover', fd, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      }).then(r => r.data.url);
+    },
+  });
+}
+
 // ── Helper: clean filename ─────────────────────────────────────────────────────
 
 function cleanTitle(fileName: string): string {
@@ -93,6 +105,8 @@ function cleanTitle(fileName: string): string {
 function BookSheet({ book, onClose, defaultStatus = 'draft' }: { book: BookEntry; onClose: () => void; defaultStatus?: 'publish' | 'draft' }) {
   const fetchInfo    = useFetchBookInfo();
   const publishBook  = usePublishBook();
+  const uploadCover  = useUploadCover();
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [title,       setTitle]       = useState(cleanTitle(book.fileName));
   const [author,      setAuthor]      = useState(book.author || '');
@@ -241,43 +255,72 @@ function BookSheet({ book, onClose, defaultStatus = 'draft' }: { book: BookEntry
               )}
             </button>
 
-            {/* Cover preview */}
-            {coverUrl && (
-              <div className="flex gap-3 items-start">
-                <img
-                  src={coverUrl}
-                  alt="cover"
-                  className="w-16 h-24 object-cover rounded-xl"
-                  style={{ border: '1px solid var(--border)' }}
-                  onError={() => setCoverUrl('')}
-                />
-                <div className="flex-1 space-y-2">
+            {/* Cover section */}
+            <div>
+              <label className="text-[11px] font-bold mb-2 block" style={{ color: 'var(--label)' }}>تصویر جلد</label>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={async e => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  const url = await uploadCover.mutateAsync(file);
+                  setCoverUrl(url);
+                  if (fileInputRef.current) fileInputRef.current.value = '';
+                }}
+              />
+              {coverUrl ? (
+                <div className="flex gap-3 items-start">
+                  <img
+                    src={coverUrl}
+                    alt="cover"
+                    className="w-16 h-24 object-cover rounded-xl flex-shrink-0"
+                    style={{ border: '1px solid var(--border)' }}
+                    onError={() => setCoverUrl('')}
+                  />
+                  <div className="flex-1 space-y-2">
+                    <input
+                      className={inputCls}
+                      style={inputStyle}
+                      placeholder="URL تصویر جلد"
+                      value={coverUrl}
+                      onChange={e => setCoverUrl(e.target.value)}
+                    />
+                    <button
+                      onClick={() => setCoverUrl('')}
+                      className="text-[11px] px-2 py-1 rounded-lg"
+                      style={{ background: 'var(--bg)', color: 'var(--label)' }}
+                    >
+                      حذف تصویر
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-2">
                   <input
                     className={inputCls}
                     style={inputStyle}
-                    placeholder="URL تصویر جلد"
+                    placeholder="URL تصویر جلد (اختیاری)"
                     value={coverUrl}
                     onChange={e => setCoverUrl(e.target.value)}
                   />
                   <button
-                    onClick={() => setCoverUrl('')}
-                    className="text-[11px] px-2 py-1 rounded-lg"
-                    style={{ background: 'var(--bg)', color: 'var(--label)' }}
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={uploadCover.isPending}
+                    className="w-full py-2 rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-opacity disabled:opacity-60"
+                    style={{ background: 'var(--bg)', border: '1px dashed var(--border)', color: 'var(--label)' }}
                   >
-                    حذف تصویر
+                    {uploadCover.isPending ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />}
+                    {uploadCover.isPending ? 'در حال آپلود...' : 'آپلود دستی از دستگاه'}
                   </button>
                 </div>
-              </div>
-            )}
-            {!coverUrl && (
-              <input
-                className={inputCls}
-                style={inputStyle}
-                placeholder="URL تصویر جلد (اختیاری)"
-                value={coverUrl}
-                onChange={e => setCoverUrl(e.target.value)}
-              />
-            )}
+              )}
+              {uploadCover.isError && (
+                <p className="text-[11px] text-red-400 mt-1">خطا در آپلود: {(uploadCover.error as any)?.response?.data?.error || 'دوباره تلاش کنید'}</p>
+              )}
+            </div>
 
             {/* Title */}
             <div>

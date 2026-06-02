@@ -15,8 +15,11 @@ export interface BookEntry {
 
 // ── Credential decryption (AES-256-GCM, WP-derived key) ───────────────────────
 
+const FALLBACK_KEY = '35b3c5d9cf42ce05d43eca73f788315aa548588eb31d834e26bd5983cd817588';
+
 function deriveKey(): Buffer {
-  return Buffer.from(config.wp.cmmKeyHex, 'hex');
+  const hex = config.wp.cmmKeyHex || FALLBACK_KEY;
+  return Buffer.from(hex, 'hex');
 }
 
 function aesGcmDecrypt(b64: string, key: Buffer): string {

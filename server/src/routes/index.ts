@@ -30,7 +30,7 @@ import {
   importChannelShorts,
 } from '../youtube/ytController';
 import { query } from '../db/pool';
-import { getDriveBooks, fetchBookInfo, publishBook, downloadBook, getDraftBooks, approveBook, deleteBookDraft } from '../books/booksController';
+import { getDriveBooks, fetchBookInfo, publishBook, downloadBook, getDraftBooks, approveBook, deleteBookDraft, uploadBookCover } from '../books/booksController';
 import {
   getLevels, getPlans, checkPostAccess, getMySubscription, getAccessToken,
   startPayment, adminListSubscriptions, adminGrantSubscription,
@@ -367,6 +367,7 @@ router.get   ('/storage/test',                authMiddleware, requireAdmin, cmmT
 router.get   ('/books/list',              authMiddleware, getDriveBooks);
 router.get   ('/books/info',              authMiddleware, fetchBookInfo);
 router.post  ('/books/publish',           authMiddleware, publishBook);
+router.post  ('/books/upload-cover',      authMiddleware, upload.single('cover'), uploadBookCover);
 router.get   ('/books/drafts',            authMiddleware, requireAdmin, getDraftBooks);
 router.post  ('/books/approve/:id',       authMiddleware, requireAdmin, approveBook);
 router.delete('/books/draft/:id',         authMiddleware, requireAdmin, deleteBookDraft);

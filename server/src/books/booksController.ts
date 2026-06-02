@@ -254,6 +254,30 @@ export async function deleteBookDraft(req: Request, res: Response) {
   }
 }
 
+// ── POST /books/upload-cover (authenticated) ──────────────────────────────────
+
+export async function uploadBookCover(req: Request, res: Response) {
+  const file = (req as any).file as Express.Multer.File | undefined;
+  if (!file) return res.status(400).json({ error: 'فایل تصویری ارسال نشده' });
+
+  const wpAuth = `Basic ${Buffer.from(`${config.wp.apiUser}:${config.wp.apiPassword}`).toString('base64')}`;
+  const ext    = file.mimetype.includes('png') ? 'png' : file.mimetype.includes('gif') ? 'gif' : 'jpg';
+
+  try {
+    const med = await axios.post(`${config.wp.url}/wp-json/wp/v2/media`, file.buffer, {
+      headers: {
+        Authorization:         wpAuth,
+        'Content-Type':        file.mimetype,
+        'Content-Disposition': `attachment; filename="book-cover-${Date.now()}.${ext}"`,
+      },
+      timeout: 30000,
+    });
+    return res.json({ url: med.data.source_url });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.response?.data?.message || err.message });
+  }
+}
+
 // ── GET /books/download/:fileId (public) ──────────────────────────────────────
 
 export async function downloadBook(req: Request, res: Response) {
