@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
-import { Activity, AlertCircle, Info, CheckCircle } from 'lucide-react';
+import { Activity, AlertCircle, Info, CheckCircle, DatabaseBackup, Loader2 } from 'lucide-react';
 import { api } from '../api/client';
+import { useAuthStore } from '../store/authStore';
 
 interface LogEntry { id: number; level: string; source: string; message: string; created_at: string; }
 interface AIStat { provider: string; requests: number; date: string; }
@@ -13,14 +14,30 @@ function LogIcon({ level }: { level: string }) {
 }
 
 export default function Monitoring() {
-  const [logs, setLogs]       = useState<LogEntry[]>([]);
-  const [aiStats, setAiStats] = useState<AIStat[]>([]);
-  const [filter, setFilter]   = useState('all');
+  const user = useAuthStore((s) => s.user);
+  const [logs, setLogs]             = useState<LogEntry[]>([]);
+  const [aiStats, setAiStats]       = useState<AIStat[]>([]);
+  const [filter, setFilter]         = useState('all');
+  const [backupLoading, setBackupLoading] = useState(false);
+  const [backupMsg, setBackupMsg]   = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     api.get('/monitoring/logs', { params: { limit: 50 } }).then(r => setLogs(r.data)).catch(() => {});
     api.get('/monitoring/ai-stats').then(r => setAiStats(r.data)).catch(() => {});
   }, []);
+
+  async function handleBackup() {
+    setBackupLoading(true);
+    setBackupMsg(null);
+    try {
+      await api.post('/admin/backup');
+      setBackupMsg({ ok: true, text: 'پشتیبان‌گیری آغاز شد — فایل به تلگرام ارسال می‌شود' });
+    } catch {
+      setBackupMsg({ ok: false, text: 'خطا در اجرای پشتیبان‌گیری' });
+    } finally {
+      setBackupLoading(false);
+    }
+  }
 
   const filtered = filter === 'all' ? logs : logs.filter(l => l.level === filter);
 
@@ -38,6 +55,35 @@ export default function Monitoring() {
   return (
     <div className="p-4 pb-28" dir="rtl">
       <h1 className="text-white font-bold text-xl mb-5">نظارت بر سیستم</h1>
+
+      {/* ── Backup card (admin only) ─────────────────────────────── */}
+      {user?.role === 'admin' && (
+        <div className="bg-surface border border-border rounded-xl p-4 mb-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <DatabaseBackup size={16} style={{ color: 'var(--primary)' }} />
+              <span className="text-sm font-bold" style={{ color: 'var(--text)' }}>پشتیبان‌گیری دیتابیس</span>
+            </div>
+            <button
+              onClick={handleBackup}
+              disabled={backupLoading}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-opacity disabled:opacity-60"
+              style={{ background: 'var(--primary-soft)', color: 'var(--primary)' }}
+            >
+              {backupLoading
+                ? <><Loader2 size={12} className="animate-spin" /> در حال اجرا...</>
+                : <><DatabaseBackup size={12} /> گرفتن پشتیبان</>
+              }
+            </button>
+          </div>
+          {backupMsg && (
+            <p className={`text-xs mt-2 ${backupMsg.ok ? 'text-green-400' : 'text-red-400'}`}>
+              {backupMsg.text}
+            </p>
+          )}
+          <p className="text-label text-[11px] mt-1">هر شب ساعت ۳ صبح به صورت خودکار اجرا می‌شود</p>
+        </div>
+      )}
 
       {/* AI Usage Chart */}
       <div className="bg-surface border border-border rounded-xl p-4 mb-4">

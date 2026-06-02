@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   CheckCircle, Clock, FileText, Sparkles, Plus,
   Image as ImageIcon, FolderTree, Cpu, ChevronLeft, MessageSquare,
-  Youtube, Smartphone, BookOpen, Mic,
+  Youtube, Smartphone, BookOpen, Mic, Cloud, Users, Activity,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../store/authStore';
@@ -159,6 +159,12 @@ export default function Dashboard() {
         onClick={() => navigate('/comments')} />
       <ActionRow icon={<Cpu size={18} />} label="تنظیمات AI"
         onClick={() => navigate('/settings')} />
+      <ActionRow icon={<Cloud size={18} />} label="فضای ابری"
+        onClick={() => navigate('/cloud-storage')} />
+      <ActionRow icon={<Users size={18} />} label="عضویت‌ها"
+        onClick={() => navigate('/membership')} />
+      <ActionRow icon={<Activity size={18} />} label="نظارت سیستم"
+        onClick={() => navigate('/monitoring')} />
 
       {/* ── FAB ───────────────────────────────────────────────────── */}
       <button
