@@ -21,6 +21,7 @@ type State =
   | { mode: 'awaiting_login_password'; username: string };
 
 const states = new Map<string, State>();
+const translateModes = new Map<string, boolean>(); // per-chat translate toggle
 
 interface AuthContext {
   userId: number;       // 0 for hard-coded admin chat
@@ -154,7 +155,7 @@ async function linkTelegramAccount(
 }
 
 // Commands available without login
-const PUBLIC_COMMANDS = new Set(['/start', '/help', '/about', '/login', '/myid', '/id', '/cancel', '/app']);
+const PUBLIC_COMMANDS = new Set(['/start', '/help', '/about', '/login', '/myid', '/id', '/cancel', '/app', '/translate']);
 
 // ── Webhook entry ─────────────────────────────────────────────────────────────
 export async function handleWebhook(req: Request, res: Response) {
@@ -222,8 +223,8 @@ async function handleMessage(msg: any) {
 
   if (!auth) return promptLogin(chatId);
 
-  // Auto-translate Persian text to academic English
-  if (isPersian(text)) {
+  // Auto-translate Persian text (only when translate mode is on)
+  if (translateModes.get(String(chatId)) && isPersian(text)) {
     await handleTranslation(chatId, auth.userId, text);
     return;
   }
@@ -253,6 +254,7 @@ async function handleCommand(chatId: number, text: string, auth: AuthContext | n
     case '/app':    return sendMessage(chatId, 'برای باز کردن مینی اپ روی دکمه پایین چت کلیک کن (🚀 ورود به اپ).');
     case '/id':
     case '/myid':   return sendMessage(chatId, `Chat ID: <code>${chatId}</code>`);
+    case '/translate': return toggleTranslate(chatId);
 
     // Authenticated
     case '/logout': return doLogout(chatId, auth!);
@@ -271,6 +273,18 @@ async function handleCommand(chatId: number, text: string, auth: AuthContext | n
 async function cancelConversation(chatId: number) {
   states.delete(String(chatId));
   await sendMessage(chatId, '✅ لغو شد.');
+}
+
+async function toggleTranslate(chatId: number) {
+  const key = String(chatId);
+  const current = translateModes.get(key) ?? false;
+  const next = !current;
+  translateModes.set(key, next);
+  await sendMessage(chatId,
+    next
+      ? '🌐 حالت ترجمه <b>فعال</b> شد.\n\nهر متن فارسی که بفرستی به انگلیسی آکادمیک ترجمه می‌شه.\nبرای خاموش کردن دوباره /translate بزن.'
+      : '🔇 حالت ترجمه <b>غیرفعال</b> شد.'
+  );
 }
 
 async function sendWelcome(chatId: number, auth: AuthContext | null) {
@@ -322,7 +336,11 @@ ${loginNote}
 سپس متن پست رو بفرست.
 
 <b>🔹 آپلود مدیا</b>
-عکس / ویدیو / صدا / PDF رو بفرست.
+عکس / ویدیو / صدا رو بفرست.
+
+<b>🔹 ترجمه آکادمیک</b>
+/translate — روشن/خاموش کردن حالت ترجمه
+وقتی فعاله، متن فارسی + PDF + TXT ترجمه می‌شن.
 
 <b>🔹 سایر</b>
 /cancel — لغو عملیات
@@ -715,11 +733,12 @@ async function handleFileUpload(msg: any, auth: AuthContext) {
     const isPdf    = mime === 'application/pdf' || fname.toLowerCase().endsWith('.pdf');
     const isTxt    = mime === 'text/plain'      || fname.toLowerCase().endsWith('.txt');
 
-    if (isPdf) {
+    const tMode = translateModes.get(String(chatId)) ?? false;
+    if (tMode && isPdf) {
       await handlePdfTranslation(chatId, auth.userId, msg.document.file_id, fname || 'document.pdf');
       return;
     }
-    if (isTxt) {
+    if (tMode && isTxt) {
       await handleTextFileTranslation(chatId, auth.userId, msg.document.file_id, fname || 'file.txt');
       return;
     }
