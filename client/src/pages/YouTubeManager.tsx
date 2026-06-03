@@ -306,18 +306,23 @@ function SwipeCard({ item, onApprove, onReject }: SwipeCardProps) {
 
   async function loadSummary() {
     setSummaryLoading(true);
-    try {
-      const { data } = await api.post('/ai/generate', {
-        action: 'summarize',
-        prompt: `خلاصه کوتاه به فارسی:\n${item.title}${item.description ? '\n' + item.description.slice(0, 500) : ''}`,
-        provider: 'gemini',
-      });
-      setAiSummary(data.result || data.content || 'خلاصه‌ای یافت نشد');
-    } catch {
-      setAiSummary('خطا در تولید خلاصه');
-    } finally {
-      setSummaryLoading(false);
+    const prompt = `خلاصه کوتاه به فارسی:\n${item.title}${item.description ? '\n' + item.description.slice(0, 500) : ''}`;
+    // Try Gemini first, fallback to Claude
+    for (const provider of ['gemini', 'claude'] as const) {
+      try {
+        const { data } = await api.post('/ai/generate', { action: 'summarize', prompt, provider });
+        setAiSummary(data.result || data.content || 'خلاصه‌ای یافت نشد');
+        setSummaryLoading(false);
+        return;
+      } catch (err: any) {
+        if (provider === 'claude') {
+          const msg = err.response?.data?.error || err.message || 'خطای ناشناخته';
+          setAiSummary(`خطا: ${msg}`);
+        }
+        // else: try next provider
+      }
     }
+    setSummaryLoading(false);
   }
 
   const overlayOpacity = ratio * 0.7;
