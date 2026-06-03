@@ -1,6 +1,6 @@
 # Session Starter — cmsWP Mini-App + Cloud Media Manager Plugin
 
-> Last updated: 2026-05-29
+> Last updated: 2026-06-04
 > Use this prompt to resume development in a new Claude Code session.
 
 ---
@@ -42,7 +42,7 @@ The mini-app authenticates using WordPress credentials (phpass). Only users with
 
 - **Repo:** https://github.com/babakdalivand/cmsWP
 - **Branch:** main
-- **Latest commit:** `b717a46` — block subscriber role from mini-app login
+- **Latest commit:** `28c99340` — fix(youtube): show real error + Claude fallback for AI summary
 
 ---
 
@@ -65,8 +65,8 @@ The mini-app authenticates using WordPress credentials (phpass). Only users with
 | Backend | Node.js, Express, TypeScript |
 | Auth | JWT HS256, WordPress phpass |
 | Database | MySQL (Hostinger shared hosting) |
-| AI | Claude API (Anthropic) |
-| Deploy | Python paramiko SFTP |
+| AI | Claude, Gemini, OpenAI, DeepSeek, Grok, Mistral |
+| Deploy | GitHub Actions CI/CD (auto on push to main) |
 | WP Plugin | PHP 8.3, WordPress hooks, REST API, WP-Cron, WP-CLI |
 | Cloud Storage | Cloudflare R2, Amazon S3, Backblaze B2, Google Drive, Local |
 
@@ -77,30 +77,20 @@ The mini-app authenticates using WordPress credentials (phpass). Only users with
 ```
 cmsWP/
 ├── client/src/
-│   ├── App.tsx                    ← Router (all routes)
-│   ├── pages/
-│   │   ├── Dashboard.tsx
-│   │   ├── CloudStorage.tsx       ← Cloud storage management (3 tabs)
-│   │   ├── YouTubeManager.tsx
-│   │   ├── Membership.tsx
-│   │   └── ... (14 pages total)
-│   └── components/layout/BottomNav.tsx  ← 5 tabs incl. فضا (cloud)
+│   ├── App.tsx
+│   ├── pages/ (16 pages)
+│   └── components/layout/BottomNav.tsx
 ├── server/src/
-│   ├── routes/index.ts            ← All routes incl. /storage/*
-│   ├── auth/authController.ts     ← Login (blocks subscriber role)
-│   ├── storage/storageController.ts  ← Proxy to WP plugin via JWT
-│   ├── ai/aiController.ts
-│   └── youtube/ytController.ts
+│   ├── routes/index.ts
+│   ├── auth/authController.ts
+│   ├── storage/storageController.ts
+│   ├── ai/aiRouter.ts
+│   ├── bot/telegramBot.ts
+│   ├── books/booksController.ts
+│   └── backup/backup.ts
 ├── wp-plugin/cloud-media-manager/
-│   ├── cloud-media-manager.php    ← Main plugin file
-│   ├── database/Schema.php        ← 4 tables: providers, files, logs, jobs
-│   └── src/
-│       ├── Security/JwtAuthenticator.php  ← X-CMM-Token header, priority 1
-│       ├── Adapters/GoogleDriveAdapter.php  ← Subfolder auto-creation
-│       ├── Api/RestRegistrar.php   ← cmm/v1 REST endpoints
-│       ├── Queue/                  ← Async job queue with retry
-│       └── Cron/                   ← WP-Cron schedules
-└── deploy.py                      ← SFTP deploy script
+├── wp-plugin/pa-youtube-sync/
+└── .github/workflows/deploy.yml  ← CI/CD auto-deploy
 ```
 
 ---
@@ -108,101 +98,41 @@ cmsWP/
 ## Critical Architecture Notes
 
 ### JWT Authentication (Plugin ↔ Mini-app)
-**IMPORTANT:** Two conflicting JWT plugins are active on WordPress:
-- `jwt-auth` (3.0.2)
-- `jwt-authentication-for-wp-rest-api` (1.5.0)
-
-These intercept `Authorization: Bearer` tokens. Our plugin uses **`X-CMM-Token`** custom header instead.
-
-- **Plugin side** (`JwtAuthenticator.php`): reads `$_SERVER['HTTP_X_CMM_TOKEN']` first, falls back to Bearer
-- **Server side** (`storageController.ts`): sends `headers: { 'X-CMM-Token': token }`
+Two conflicting JWT plugins on WordPress intercept `Authorization: Bearer`.
+Our plugin uses **`X-CMM-Token`** custom header instead.
 - **Site Key:** `8b6c0669aea72fd807a2c7adc14a5f8de06137f699d09784`
 - **WP option name:** `cmm_site_key`
-- **JWT audience:** must match `get_site_url()` = `https://persianatheists.com`
 
-### Deploy Commands
+### CI/CD
+Push to `main` → GitHub Actions auto-deploys everything.
+Secret `SSH_PASSWORD` already set in repo.
+
+### Manual Deploy (fallback)
 ```bash
-# Deploy server (TypeScript compiled):
 cd "E:\MiniApp Projects\cmsWP"
-python deploy.py server    # upload server JS files + restart
-
-# Deploy React client:
-python deploy.py client    # build + upload dist/
-
-# Deploy everything:
-python deploy.py all
-```
-
-### TypeScript Compile
-```bash
-cd "E:\MiniApp Projects\cmsWP\server"
-npx tsc
+python deploy.py server|client|all|restart
 ```
 
 ---
 
-## Cloud Media Manager Plugin — Key Details
+## Current Status (2026-06-04) — PROJECT COMPLETE ✅
 
-### Tables Created on Activation
-- `wp_cmm_providers` — provider configs (credentials AES-256-GCM encrypted)
-- `wp_cmm_files` — managed files
-- `wp_cmm_logs` — operation logs
-- `wp_cmm_jobs` — async job queue
-
-### Credential Encryption
-- Algorithm: AES-256-GCM
-- Key: `substr(hash('sha256', AUTH_SALT . get_site_url(), true), 0, 32)`
-- Never store unencrypted in wp_options
-
-### REST Endpoints (all require X-CMM-Token)
-- `GET /wp-json/cmm/v1/status`
-- `GET /wp-json/cmm/v1/providers`
-- `POST /wp-json/cmm/v1/providers`
-- `DELETE /wp-json/cmm/v1/providers/{id}`
-- `POST /wp-json/cmm/v1/providers/{id}/default`
-- `GET /wp-json/cmm/v1/config`
-- `POST /wp-json/cmm/v1/config`
-- `POST /wp-json/cmm/v1/sync`
-- `GET /wp-json/cmm/v1/logs`
-
-### Google Drive Provider (Active)
-- Folder ID: `1YvVgSIglSORMZi3KbjMvI2YWAj6ZWmwx`
-- Subfolder auto-creation: `podcasts/ep01.mp3` → creates `podcasts/` in Drive root folder
-- Connection tested ✓
+All major features built, tested, and deployed.
+See `REPORT_2026-06-04.md` for full project report.
 
 ---
 
-## Current Status (2026-05-29)
+## Pending / Future Work
 
-✅ Plugin active and working on persianatheists.com
-✅ JWT connection confirmed (200 OK on all endpoints)
-✅ Google Drive provider connected
-✅ Subscriber role blocked from mini-app
-✅ React CloudStorage page with bottom nav fix
-✅ All changes committed and pushed to GitHub
-
----
-
-## Pending Tasks
-
-### High Priority
-- [ ] Test full file upload flow through mini-app → plugin → Google Drive
-- [ ] CI/CD: add GitHub Actions secrets for auto-deploy
-
-### Medium Priority
-- [ ] Add more cloud providers (R2, S3) if needed
-- [ ] Run `composer install` on server for PHPUnit tests
-
-### Low Priority
-- [ ] Dark mode toggle for site visitors
-- [ ] Clean up `server-patch/` directory (old files)
-- [ ] Investigate `frontend/` (Next.js) deploy status
+- [ ] Add R2/S3 cloud providers (low priority)
+- [ ] PHPUnit tests for cloud-media-manager
+- [ ] Dark mode for site visitors
 
 ---
 
 ## Security Rules (MUST PRESERVE)
 - Never store provider credentials unencrypted in wp_options
 - JWT TTL: 5 minutes, audience must match site_url exactly
-- Site Key must be kept secret — it's the shared HMAC secret
+- Site Key must be kept secret
 - Subscriber role must never have access to mini-app
 - SSH credentials must not be committed to git
